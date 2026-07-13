@@ -30,6 +30,7 @@ export function configureBaseTestEnv(): void {
   process.env.STORAGE_LOCAL_PATH = './var/uploads';
   process.env.CORS_ALLOWED_ORIGINS = 'http://localhost:5173';
   process.env.LOG_LEVEL = 'error';
+  process.env.EMERGENCY_SLA_HOURS = '2';
 }
 
 // Zorunlu sira (duzeltme #13): container baslat -> dinamik URI al ->

@@ -57,3 +57,10 @@ export const authConfig = registerAs('auth', () => {
     otpResendCooldownSeconds: env.OTP_RESEND_COOLDOWN_SECONDS,
   };
 });
+
+export const ticketsConfig = registerAs('tickets', () => {
+  const env = getValidatedEnv();
+  return {
+    emergencySlaHours: env.EMERGENCY_SLA_HOURS,
+  };
+});
