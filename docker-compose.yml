@@ -1,0 +1,44 @@
+# Development Compose (docs/implementation-overrides.md #12):
+# - API source code container'a volume olarak baglanir, hot reload calisir.
+# - node_modules ayri named volume'dur (host bind mount'un ustune yazmasin).
+# - Upload klasoru container kullanicisi tarafindan yazilabilir.
+# - PostgreSQL healthcheck kullanilir; API, DB healthy olmadan baslamaz.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: site_support
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U app -d site_support']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      target: build
+    command: npm run start:dev
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://app:app@db:5432/site_support?schema=public
+    ports:
+      - '3000:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - node_modules:/app/node_modules
+      - ./var/uploads:/app/var/uploads
+
+volumes:
+  pgdata:
+  node_modules:

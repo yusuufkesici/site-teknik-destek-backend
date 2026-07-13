@@ -1,0 +1,8 @@
+node_modules
+dist
+src/generated
+.git
+.env
+*.log
+var/uploads
+npm-debug.log*

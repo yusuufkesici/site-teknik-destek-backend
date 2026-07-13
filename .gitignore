@@ -1,0 +1,11 @@
+node_modules/
+dist/
+src/generated/
+.env
+*.log
+var/uploads/*
+!var/uploads/.gitkeep
+coverage/
+.env.*
+!.env.example
+.claude/
