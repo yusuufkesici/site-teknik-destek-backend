@@ -38,6 +38,11 @@ const rawEnvSchema = z.object({
 
   CORS_ALLOWED_ORIGINS: z.string().min(1),
   LOG_LEVEL: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
+
+  // Faz 4: EMERGENCY urgency'li ticket'lar icin sabit SLA hedefi (saat).
+  // Yalniz contract.emergencyCoverage=true iken kullanilir (onaylanan Faz 4
+  // plani Bolum 16).
+  EMERGENCY_SLA_HOURS: z.coerce.number().int().positive(),
 });
 
 export const envSchema = rawEnvSchema.superRefine((env, ctx) => {

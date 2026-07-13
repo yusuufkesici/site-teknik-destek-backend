@@ -7,6 +7,7 @@ import {
   corsConfig,
   databaseConfig,
   loggingConfig,
+  ticketsConfig,
 } from './config/configuration';
 import { validateEnv } from './config/validation.schema';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -17,13 +18,14 @@ import { AuthModule } from './modules/auth/auth.module';
 import { MembershipsModule } from './modules/memberships/memberships.module';
 import { FacilitiesModule } from './modules/facilities/facilities.module';
 import { UsersModule } from './modules/users/users.module';
+import { TicketsModule } from './modules/tickets/tickets.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
-      load: [appConfig, corsConfig, databaseConfig, loggingConfig, authConfig],
+      load: [appConfig, corsConfig, databaseConfig, loggingConfig, authConfig, ticketsConfig],
     }),
     LoggerModule,
     PrismaModule,
@@ -32,6 +34,7 @@ import { UsersModule } from './modules/users/users.module';
     MembershipsModule,
     FacilitiesModule,
     UsersModule,
+    TicketsModule,
   ],
   providers: [
     {
