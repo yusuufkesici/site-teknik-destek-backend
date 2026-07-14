@@ -26,10 +26,11 @@ import type { UpdateTicketDto } from '../dto/update-ticket.dto';
 import { TicketAuthorizationPolicy } from '../policies/ticket-authorization.policy';
 import type { TicketListFilter, TicketRow } from '../repositories/ticket.repository';
 import { TicketRepository } from '../repositories/ticket.repository';
-import { Phase4TicketTransitionPolicy } from '../state/phase4-ticket-transition-policy';
+import { TicketDirectTransitionPolicy } from '../state/ticket-direct-transition.policy';
 import { TicketStateMachine } from '../state/ticket-state-machine';
 import { ContractQueryService } from './contract-query.service';
 import { computeSlaTargetAt } from './sla.util';
+import { TicketTransitionService } from './ticket-transition.service';
 
 const DEFAULT_PAGE_LIMIT = 20;
 
@@ -50,7 +51,8 @@ export class TicketService {
     private readonly facilityRepo: FacilityRepository,
     private readonly policy: TicketAuthorizationPolicy,
     private readonly stateMachine: TicketStateMachine,
-    private readonly phase4Policy: Phase4TicketTransitionPolicy,
+    private readonly directPolicy: TicketDirectTransitionPolicy,
+    private readonly ticketTransition: TicketTransitionService,
     private readonly contractQuery: ContractQueryService,
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxService,
@@ -364,86 +366,29 @@ export class TicketService {
 
       await this.policy.assertCanRead(actor, ticket, tx);
 
-      // Onemli sira: ONCE stateMachine.assertTransition - bu, from===to
-      // durumunu 409 TICKET_STATUS_UNCHANGED olarak doğru siniflandirir
-      // (implementation-overrides.md #9). Eger phase4Policy once calisirsa,
-      // ornegin ticket zaten TRIAGED iken tekrar toStatus=TRIAGED gonderilirse
-      // (TRIAGED->TRIAGED ciftinin kendisi Faz 4 allowlist'inde OLMADIGI
-      // icin) yanlislikla TICKET_INVALID_STATUS_TRANSITION donerdi.
-      // stateMachine'den SONRA phase4Policy.assertAllowedInThisPhase
-      // cagrilir - Faz 4'un kosulsuz siniri (duzeltme #1/#2) hala tam
-      // olarak korunur, cunku hicbir DB yazimi bu iki kontrolden once
-      // gerceklesmez: ASSIGNED->CANCELLED gibi gecisler her rol icin
-      // (state machine OPERATIONS'a izin verse bile) phase4Policy
-      // tarafindan mutasyondan ONCE kesilir.
+      // Onemli sira (Faz 5'te korunuyor): ONCE stateMachine.assertTransition -
+      // bu, from===to durumunu 409 TICKET_STATUS_UNCHANGED olarak dogru
+      // siniflandirir (implementation-overrides.md #9). Eger directPolicy
+      // once calisirsa, ornegin ticket zaten TRIAGED iken tekrar
+      // toStatus=TRIAGED gonderilirse (TRIAGED->TRIAGED ciftinin kendisi
+      // allowlist'te OLMADIGI icin) yanlislikla
+      // TICKET_INVALID_STATUS_TRANSITION donerdi. stateMachine'den SONRA
+      // directPolicy.assertAllowedDirectly cagrilir - genel ticket ucunun
+      // kosulsuz siniri hala tam korunur, cunku hicbir DB yazimi bu iki
+      // kontrolden once gerceklesmez: ASSIGNED->CANCELLED gibi assignment'a
+      // ait gecisler (state machine ilgili role izin verse bile)
+      // directPolicy tarafindan mutasyondan ONCE kesilir - yalniz
+      // TicketAssignmentWorkflowService bu gecisleri yapabilir.
       this.stateMachine.assertTransition(ticket.status, toStatus, actor.role, reason);
-      this.phase4Policy.assertAllowedInThisPhase(ticket.status, toStatus);
+      this.directPolicy.assertAllowedDirectly(ticket.status, toStatus);
 
-      // stateMachine.assertTransition CANCELLED gecisinde reason'i zaten
-      // zorunlu kildi; yine de non-null assertion kullanmadan acikca
-      // dogrulanir.
-      let extra: { cancelledAt?: Date; cancellationReason?: string } = {};
-      if (toStatus === 'CANCELLED') {
-        if (!reason?.trim()) {
-          throw new DomainError(
-            ERROR_CODES.TICKET_TRANSITION_REASON_REQUIRED,
-            HttpStatus.UNPROCESSABLE_ENTITY,
-            'Bu gecis icin gerekce zorunlu.',
-          );
-        }
-        extra = { cancelledAt: new Date(), cancellationReason: reason };
-      }
-
-      const updated = await this.ticketRepo.updateStatus(
-        tx,
-        ticketId,
-        ticket.version,
+      return this.ticketTransition.applyStatusTransition(tx, {
+        actor,
+        ticket,
         toStatus,
-        extra,
-      );
-      if (!updated) {
-        throw new DomainError(
-          ERROR_CODES.CONCURRENT_MODIFICATION,
-          HttpStatus.CONFLICT,
-          'Ticket baska bir islemle guncellenmis.',
-        );
-      }
-
-      await this.ticketRepo.addHistory(tx, {
-        ticketId,
-        previousStatus: ticket.status,
-        newStatus: toStatus,
-        changedByUserId: actor.id,
-        reason: reason ?? null,
-        metadata: null,
+        reason,
+        auditAction,
       });
-
-      // Duzeltme #7: audit metadata'sina ham reason YAZILMAZ.
-      await this.audit.log(tx, {
-        action: auditAction,
-        actorUserId: actor.id,
-        entityType: 'Ticket',
-        entityId: ticketId,
-        siteId: ticket.siteId,
-        metadata: { from: ticket.status, to: toStatus, reasonProvided: Boolean(reason?.trim()) },
-      });
-
-      // Duzeltme #7: outbox payload'inda reason/title/description/operationNote YOK.
-      await this.outbox.publishInTx(tx, {
-        eventType: 'TicketStatusChanged',
-        aggregateType: 'Ticket',
-        aggregateId: ticketId,
-        payload: {
-          ticketId,
-          ticketCode: ticket.code,
-          siteId: ticket.siteId,
-          previousStatus: ticket.status,
-          newStatus: toStatus,
-          actorUserId: actor.id,
-        },
-      });
-
-      return updated;
     });
   }
 
