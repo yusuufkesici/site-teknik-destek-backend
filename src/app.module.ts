@@ -7,6 +7,7 @@ import {
   corsConfig,
   databaseConfig,
   loggingConfig,
+  storageConfig,
   ticketsConfig,
 } from './config/configuration';
 import { validateEnv } from './config/validation.schema';
@@ -21,13 +22,22 @@ import { UsersModule } from './modules/users/users.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
 import { MaterialsModule } from './modules/materials/materials.module';
 import { AssignmentsModule } from './modules/assignments/assignments.module';
+import { AttachmentsModule } from './modules/attachments/attachments.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
-      load: [appConfig, corsConfig, databaseConfig, loggingConfig, authConfig, ticketsConfig],
+      load: [
+        appConfig,
+        corsConfig,
+        databaseConfig,
+        loggingConfig,
+        authConfig,
+        ticketsConfig,
+        storageConfig,
+      ],
     }),
     LoggerModule,
     PrismaModule,
@@ -39,6 +49,7 @@ import { AssignmentsModule } from './modules/assignments/assignments.module';
     TicketsModule,
     MaterialsModule,
     AssignmentsModule,
+    AttachmentsModule,
   ],
   providers: [
     {

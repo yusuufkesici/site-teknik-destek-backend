@@ -123,6 +123,13 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         return ERROR_CODES.NOT_FOUND;
       case HttpStatus.CONFLICT:
         return ERROR_CODES.CONFLICT;
+      // Bu fazda (Faz 6) 413'un tek kaynagi FileInterceptor'in Multer
+      // LIMIT_FILE_SIZE hatasini donusturdugu PayloadTooLargeException'dir
+      // (@nestjs/platform-express/multer/multer.utils.ts transformException) -
+      // ham MulterError filter'a hicbir zaman ulasmaz, bu yuzden burada ayrica
+      // ozel bir instanceof kontrolu yerine genel status eslemesi yeterlidir.
+      case HttpStatus.PAYLOAD_TOO_LARGE:
+        return ERROR_CODES.ATTACHMENT_TOO_LARGE;
       default:
         return ERROR_CODES.INTERNAL_ERROR;
     }

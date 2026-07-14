@@ -9,13 +9,17 @@ import { ContractQueryService } from './services/contract-query.service';
 import { TicketService } from './services/ticket.service';
 import { TicketTransitionService } from './services/ticket-transition.service';
 import { TicketAuthorizationPolicy } from './policies/ticket-authorization.policy';
+import { TicketReadAccessService } from './services/ticket-read-access.service';
 import { TicketDirectTransitionPolicy } from './state/ticket-direct-transition.policy';
 import { TicketStateMachine } from './state/ticket-state-machine';
 import { TicketsController } from './tickets.controller';
 
 // Faz 5 Bolum 2: TicketRepository/TicketStateMachine ASLA export edilmez.
 // AssignmentsModule bu modulu import eder ve yalniz TICKET_TRANSITION_PORT
-// token'ini enjekte eder - dar, transaction-aware bir port.
+// token'ini enjekte eder - dar, transaction-aware bir port. Faz 6 Bolum 3:
+// AttachmentsModule icin ayni desende ikinci bir dar export -
+// TicketReadAccessService (concrete servis export, MaterialLookupService
+// ile ayni yaklasim).
 @Module({
   imports: [MembershipsModule, FacilitiesModule, AuditModule, EventsModule],
   controllers: [TicketsController],
@@ -27,8 +31,9 @@ import { TicketsController } from './tickets.controller';
     TicketDirectTransitionPolicy,
     TicketTransitionService,
     TicketService,
+    TicketReadAccessService,
     { provide: TICKET_TRANSITION_PORT, useExisting: TicketTransitionService },
   ],
-  exports: [TICKET_TRANSITION_PORT],
+  exports: [TICKET_TRANSITION_PORT, TicketReadAccessService],
 })
 export class TicketsModule {}

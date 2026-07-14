@@ -64,3 +64,19 @@ export const ticketsConfig = registerAs('tickets', () => {
     emergencySlaHours: env.EMERGENCY_SLA_HOURS,
   };
 });
+
+export const storageConfig = registerAs('storage', () => {
+  const env = getValidatedEnv();
+  return {
+    provider: env.STORAGE_PROVIDER,
+    localPath: env.STORAGE_LOCAL_PATH,
+    s3: {
+      endpoint: env.S3_ENDPOINT,
+      region: env.S3_REGION,
+      bucket: env.S3_BUCKET,
+      accessKey: env.S3_ACCESS_KEY,
+      secretKey: env.S3_SECRET_KEY,
+      forcePathStyle: env.S3_FORCE_PATH_STYLE,
+    },
+  };
+});

@@ -8,6 +8,7 @@ import { AssignmentsController } from './assignments.controller';
 import { AssignmentAuthorizationPolicy } from './policies/assignment-authorization.policy';
 import { AssignmentMaterialRepository } from './repositories/assignment-material.repository';
 import { AssignmentRepository } from './repositories/assignment.repository';
+import { AssignmentLookupService } from './services/assignment-lookup.service';
 import { AssignmentService } from './services/assignment.service';
 import { TicketAssignmentWorkflowService } from './services/ticket-assignment-workflow.service';
 
@@ -15,7 +16,9 @@ import { TicketAssignmentWorkflowService } from './services/ticket-assignment-wo
 // MaterialsModule'u import eder, tersi asla olmaz. TicketRepository/
 // MaterialRepository asla dogrudan enjekte edilmez, yalniz TicketsModule'un
 // export ettigi TICKET_TRANSITION_PORT ve MaterialsModule'un export ettigi
-// MaterialLookupService kullanilir.
+// MaterialLookupService kullanilir. Faz 6 Bolum 3: AttachmentsModule icin
+// ayni desende AssignmentLookupService export edilir - AssignmentRepository
+// yine dogrudan export edilmez.
 @Module({
   imports: [TicketsModule, MaterialsModule, MembershipsModule, AuditModule, EventsModule],
   controllers: [AssignmentsController],
@@ -25,6 +28,8 @@ import { TicketAssignmentWorkflowService } from './services/ticket-assignment-wo
     AssignmentAuthorizationPolicy,
     AssignmentService,
     TicketAssignmentWorkflowService,
+    AssignmentLookupService,
   ],
+  exports: [AssignmentLookupService],
 })
 export class AssignmentsModule {}
