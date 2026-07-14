@@ -19,6 +19,8 @@ import { MembershipsModule } from './modules/memberships/memberships.module';
 import { FacilitiesModule } from './modules/facilities/facilities.module';
 import { UsersModule } from './modules/users/users.module';
 import { TicketsModule } from './modules/tickets/tickets.module';
+import { MaterialsModule } from './modules/materials/materials.module';
+import { AssignmentsModule } from './modules/assignments/assignments.module';
 
 @Module({
   imports: [
@@ -35,6 +37,8 @@ import { TicketsModule } from './modules/tickets/tickets.module';
     FacilitiesModule,
     UsersModule,
     TicketsModule,
+    MaterialsModule,
+    AssignmentsModule,
   ],
   providers: [
     {

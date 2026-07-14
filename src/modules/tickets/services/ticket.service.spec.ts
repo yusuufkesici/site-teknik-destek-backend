@@ -70,7 +70,14 @@ function buildService() {
     assertCanUpdateFields: jest.fn(),
   };
   const stateMachine = { assertTransition: jest.fn() };
-  const phase4Policy = { assertAllowedInThisPhase: jest.fn() };
+  const directPolicy = { assertAllowedDirectly: jest.fn() };
+  const ticketTransition = {
+    applyStatusTransition: jest.fn().mockImplementation(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (_tx: unknown, params: any) =>
+        buildTicket({ version: 1, status: params.toStatus, siteId: params.ticket.siteId }),
+    ),
+  };
   const contractQuery = {
     findActiveForSite: jest.fn().mockResolvedValue({
       id: 'contract-1',
@@ -97,7 +104,9 @@ function buildService() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     stateMachine as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    phase4Policy as any,
+    directPolicy as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ticketTransition as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     contractQuery as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -117,7 +126,8 @@ function buildService() {
     facilityRepo,
     policy,
     stateMachine,
-    phase4Policy,
+    directPolicy,
+    ticketTransition,
     contractQuery,
     audit,
     outbox,
@@ -328,8 +338,8 @@ describe('TicketService.update', () => {
 });
 
 describe('TicketService.changeStatus / cancel', () => {
-  it("changeStatus: stateMachine (from===to dogru siniflandirma icin) Phase4TicketTransitionPolicy'den ONCE cagrilir", async () => {
-    const { service, phase4Policy, stateMachine } = buildService();
+  it("changeStatus: stateMachine (from===to dogru siniflandirma icin) TicketDirectTransitionPolicy'den ONCE cagrilir", async () => {
+    const { service, directPolicy, stateMachine } = buildService();
     await service.changeStatus(actor('OPERATIONS'), 'ticket-1', { toStatus: 'TRIAGED' } as never);
 
     expect(stateMachine.assertTransition).toHaveBeenCalledWith(
@@ -338,36 +348,27 @@ describe('TicketService.changeStatus / cancel', () => {
       'OPERATIONS',
       undefined,
     );
-    expect(phase4Policy.assertAllowedInThisPhase).toHaveBeenCalledWith('OPEN', 'TRIAGED');
+    expect(directPolicy.assertAllowedDirectly).toHaveBeenCalledWith('OPEN', 'TRIAGED');
 
     const stateMachineOrder = stateMachine.assertTransition.mock.invocationCallOrder[0];
-    const phase4Order = phase4Policy.assertAllowedInThisPhase.mock.invocationCallOrder[0];
-    expect(stateMachineOrder).toBeLessThan(phase4Order);
+    const directPolicyOrder = directPolicy.assertAllowedDirectly.mock.invocationCallOrder[0];
+    expect(stateMachineOrder).toBeLessThan(directPolicyOrder);
   });
 
-  it('changeStatus basarili oldugunda TICKET_STATUS_CHANGED audit + TicketStatusChanged outbox yazar', async () => {
-    const { service, audit, outbox } = buildService();
+  it('changeStatus basarili oldugunda ticketTransition.applyStatusTransition TICKET_STATUS_CHANGED ile cagrilir', async () => {
+    const { service, ticketTransition } = buildService();
     await service.changeStatus(actor('OPERATIONS'), 'ticket-1', { toStatus: 'TRIAGED' } as never);
 
-    expect(audit.log).toHaveBeenCalledWith(
+    expect(ticketTransition.applyStatusTransition).toHaveBeenCalledWith(
       'tx',
-      expect.objectContaining({
-        action: 'TICKET_STATUS_CHANGED',
-        metadata: { from: 'OPEN', to: 'TRIAGED', reasonProvided: false },
-      }),
+      expect.objectContaining({ toStatus: 'TRIAGED', auditAction: 'TICKET_STATUS_CHANGED' }),
     );
-    expect(outbox.publishInTx).toHaveBeenCalledWith(
-      'tx',
-      expect.objectContaining({ eventType: 'TicketStatusChanged' }),
-    );
-    const [, entry] = outbox.publishInTx.mock.calls[0];
-    expect(entry.payload).not.toHaveProperty('reason');
   });
 
-  it('Phase4TicketTransitionPolicy reddederse (ASSIGNED->CANCELLED) TICKET_INVALID_STATUS_TRANSITION firlatir', async () => {
-    const { service, phase4Policy, ticketRepo } = buildService();
+  it('TicketDirectTransitionPolicy reddederse (ASSIGNED->CANCELLED) TICKET_INVALID_STATUS_TRANSITION firlatir', async () => {
+    const { service, directPolicy, ticketRepo } = buildService();
     ticketRepo.findByIdForUpdate.mockResolvedValue(buildTicket({ status: 'ASSIGNED' }));
-    phase4Policy.assertAllowedInThisPhase.mockImplementation(() => {
+    directPolicy.assertAllowedDirectly.mockImplementation(() => {
       throw Object.assign(new Error('reddedildi'), {
         code: 'TICKET_INVALID_STATUS_TRANSITION',
         getStatus: () => 409,
@@ -381,19 +382,19 @@ describe('TicketService.changeStatus / cancel', () => {
     );
   });
 
-  it('cancel basarili oldugunda TICKET_CANCELLED audit yazar ve reasonProvided=true olur', async () => {
-    const { service, audit, ticketRepo } = buildService();
-    ticketRepo.updateStatus.mockResolvedValue(buildTicket({ version: 1, status: 'CANCELLED' }));
+  it('cancel basarili oldugunda ticketTransition.applyStatusTransition TICKET_CANCELLED ile cagrilir', async () => {
+    const { service, ticketTransition } = buildService();
 
     await service.cancel(actor('RESIDENT', 'resident-1'), 'ticket-1', {
       reason: 'vazgectim',
     } as never);
 
-    expect(audit.log).toHaveBeenCalledWith(
+    expect(ticketTransition.applyStatusTransition).toHaveBeenCalledWith(
       'tx',
       expect.objectContaining({
-        action: 'TICKET_CANCELLED',
-        metadata: { from: 'OPEN', to: 'CANCELLED', reasonProvided: true },
+        toStatus: 'CANCELLED',
+        reason: 'vazgectim',
+        auditAction: 'TICKET_CANCELLED',
       }),
     );
   });
