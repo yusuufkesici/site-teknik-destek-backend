@@ -1,5 +1,7 @@
 import type { TicketUrgency } from '../../../generated/prisma-client/enums';
-import type { ActiveContractRow } from './contract-query.service';
+// Faz 7: ActiveContractRow, ContractsModule'un tek public erisim yuzeyi olan
+// ContractLookupService'e tasindi (davranis birebir ayni).
+import type { ActiveContractRow } from '../../contracts/services/contract-lookup.service';
 
 const HOUR_IN_MS = 3_600_000;
 

@@ -479,7 +479,11 @@ model ContractInvoice {
 
   contract Contract @relation(fields: [contractId], references: [id], onDelete: Restrict)
 
-  @@unique([contractId, billingPeriodStart])
+  // Faz 7: kosulsuz @@unique([contractId, billingPeriodStart]) kaldirildi.
+  // Yerine yalniz status <> 'CANCELLED' kayitlari kapsayan partial unique
+  // index (uq_contract_invoices_period_start_open) custom migration'da
+  // tanimlidir - iptal + ayni donem icin yeniden olusturma desteklenir
+  // (onaylanan Faz 7 plani Bolum 4.11/11).
   @@index([contractId, status])
   @@index([status, dueDate])
   @@map("contract_invoices")

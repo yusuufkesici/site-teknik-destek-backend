@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { AuditModule } from '../../infrastructure/audit/audit.module';
 import { EventsModule } from '../../infrastructure/events/events.module';
+import { ContractsModule } from '../contracts/contracts.module';
 import { FacilitiesModule } from '../facilities/facilities.module';
 import { MembershipsModule } from '../memberships/memberships.module';
 import { TICKET_TRANSITION_PORT } from './ports/ticket-transition.port';
 import { TicketRepository } from './repositories/ticket.repository';
-import { ContractQueryService } from './services/contract-query.service';
 import { TicketService } from './services/ticket.service';
 import { TicketTransitionService } from './services/ticket-transition.service';
 import { TicketAuthorizationPolicy } from './policies/ticket-authorization.policy';
@@ -20,12 +20,14 @@ import { TicketsController } from './tickets.controller';
 // AttachmentsModule icin ayni desende ikinci bir dar export -
 // TicketReadAccessService (concrete servis export, MaterialLookupService
 // ile ayni yaklasim).
+// Faz 7: eski ContractQueryService kaldirildi; aktif sozlesme sorgusu artik
+// ContractsModule'un tek public yuzeyi olan ContractLookupService uzerinden
+// yapilir (bagimlilik yonu TicketsModule -> ContractsModule, tek tarafli).
 @Module({
-  imports: [MembershipsModule, FacilitiesModule, AuditModule, EventsModule],
+  imports: [MembershipsModule, FacilitiesModule, ContractsModule, AuditModule, EventsModule],
   controllers: [TicketsController],
   providers: [
     TicketRepository,
-    ContractQueryService,
     TicketAuthorizationPolicy,
     TicketStateMachine,
     TicketDirectTransitionPolicy,
