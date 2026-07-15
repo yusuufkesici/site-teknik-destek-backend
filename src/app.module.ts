@@ -23,6 +23,8 @@ import { TicketsModule } from './modules/tickets/tickets.module';
 import { MaterialsModule } from './modules/materials/materials.module';
 import { AssignmentsModule } from './modules/assignments/assignments.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
+import { ContractsModule } from './modules/contracts/contracts.module';
+import { BillingModule } from './modules/billing/billing.module';
 
 @Module({
   imports: [
@@ -50,6 +52,8 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
     MaterialsModule,
     AssignmentsModule,
     AttachmentsModule,
+    ContractsModule,
+    BillingModule,
   ],
   providers: [
     {

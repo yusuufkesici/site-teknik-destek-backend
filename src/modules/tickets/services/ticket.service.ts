@@ -28,7 +28,7 @@ import type { TicketListFilter, TicketRow } from '../repositories/ticket.reposit
 import { TicketRepository } from '../repositories/ticket.repository';
 import { TicketDirectTransitionPolicy } from '../state/ticket-direct-transition.policy';
 import { TicketStateMachine } from '../state/ticket-state-machine';
-import { ContractQueryService } from './contract-query.service';
+import { ContractLookupService } from '../../contracts/services/contract-lookup.service';
 import { computeSlaTargetAt } from './sla.util';
 import { TicketTransitionService } from './ticket-transition.service';
 
@@ -53,7 +53,11 @@ export class TicketService {
     private readonly stateMachine: TicketStateMachine,
     private readonly directPolicy: TicketDirectTransitionPolicy,
     private readonly ticketTransition: TicketTransitionService,
-    private readonly contractQuery: ContractQueryService,
+    // Faz 7: contract erisiminin tek otoritesi ContractsModule -
+    // ContractLookupService, eski ContractQueryService.findActiveForSite
+    // davranisini birebir tasir (TICKET_SITE_CONTRACT_INACTIVE ve SLA
+    // hesaplamasi degismez).
+    private readonly contractQuery: ContractLookupService,
     private readonly audit: AuditWriter,
     private readonly outbox: OutboxService,
     private readonly config: ConfigService,
