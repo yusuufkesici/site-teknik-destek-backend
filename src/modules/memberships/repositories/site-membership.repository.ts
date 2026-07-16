@@ -100,6 +100,30 @@ export class SiteMembershipRepository {
     return result.count;
   }
 
+  // Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 3.2/6.4):
+  // findManagedSiteIds'in ters yonu - "bu site'nin aktif MANAGER'lari
+  // kimler" (ContractExpiring/InvoiceOverdue bildirim alicisi cozumlemesi
+  // icin). Ayni filtre/index deseni (@@index([siteId, membershipRole,
+  // isActive])), baska site'nin yoneticisi asla donmez.
+  async findActiveManagerUserIdsForSite(
+    client: PrismaClientLike,
+    siteId: string,
+    now: Date,
+  ): Promise<string[]> {
+    const rows = await client.siteMembership.findMany({
+      where: {
+        siteId,
+        membershipRole: 'MANAGER',
+        isActive: true,
+        startsAt: { lte: now },
+        OR: [{ endsAt: null }, { endsAt: { gt: now } }],
+      },
+      select: { userId: true },
+    });
+
+    return rows.map((row) => row.userId);
+  }
+
   async findManagedSiteIds(client: PrismaClientLike, userId: string, now: Date): Promise<string[]> {
     const rows = await client.siteMembership.findMany({
       where: {

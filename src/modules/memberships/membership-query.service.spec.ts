@@ -8,6 +8,7 @@ function buildService() {
     hasActiveManagerForSite: jest.fn().mockResolvedValue(false),
     listActiveForUser: jest.fn().mockResolvedValue([]),
     findManagedSiteIds: jest.fn().mockResolvedValue([]),
+    findActiveManagerUserIdsForSite: jest.fn().mockResolvedValue([]),
   };
 
   const service = new MembershipQueryService(
@@ -95,5 +96,24 @@ describe('MembershipQueryService', () => {
     const result = await service.listManagedSiteIds('manager-1');
 
     expect(result).toEqual(['site-1', 'site-2']);
+  });
+
+  // Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 3.2/6.4): bildirim
+  // alicisi cozumlemesi - yalniz ilgili site'nin aktif MANAGER'larini doner.
+  it('listActiveManagerUserIds repository.findActiveManagerUserIdsForSite metoduna siteId ile delege eder', async () => {
+    const { service, siteMembershipRepo } = buildService();
+    siteMembershipRepo.findActiveManagerUserIdsForSite.mockResolvedValue([
+      'manager-1',
+      'manager-2',
+    ]);
+
+    const result = await service.listActiveManagerUserIds('site-1');
+
+    expect(result).toEqual(['manager-1', 'manager-2']);
+    expect(siteMembershipRepo.findActiveManagerUserIdsForSite).toHaveBeenCalledWith(
+      expect.anything(),
+      'site-1',
+      expect.any(Date),
+    );
   });
 });

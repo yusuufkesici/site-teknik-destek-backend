@@ -521,9 +521,44 @@ model OutboxEvent {
   attemptCount  Int          @default(0) @map("attempt_count")
   nextAttemptAt DateTime?    @map("next_attempt_at") @db.Timestamptz(6)
   processedAt   DateTime?    @map("processed_at") @db.Timestamptz(6)
+  // Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 8/11): FAILED
+  // gecisinin zaman damgasi - processedAt yalniz basariyi temsil eder.
+  failedAt      DateTime?    @map("failed_at") @db.Timestamptz(6)
   lastError     String?      @map("last_error") @db.VarChar(2000)
   createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([status, nextAttemptAt])
   @@map("outbox_events")
+}
+
+// Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 3.1/8): outbox_events
+// (domain olay akisi, tek onayli tuketicili) ile per-recipient SMS teslimat
+// kuyrugu bilincli olarak ayri tutulur. NotificationDispatcher.fanOut() bir
+// outbox_events satirini TEK transaction icinde N adet bu satira boler ve
+// kaynak satiri PROCESSED yapar (fan-out exactly-once); bu tablonun kendi
+// claim/retry dongusu (NotificationDeliveryRelay) ise at-least-once'tur.
+model NotificationDelivery {
+  id              String       @id @default(uuid()) @db.Uuid
+  sourceEventId   String       @map("source_event_id") @db.Uuid
+  sourceEventType String       @map("source_event_type") @db.VarChar(100)
+  channel         String       @db.VarChar(20) // 'SMS' (tek deger, Faz 8)
+  smsMethod       String       @map("sms_method") @db.VarChar(30) // 'EMERGENCY_ALERT' | 'TICKET_NOTIFICATION'
+  recipientUserId String       @map("recipient_user_id") @db.Uuid
+  // Her zaman normalize edilmis (E.164) deger - fan-out normalizasyondan
+  // GECMEMIS bir degeri asla buraya yazmaz (plan Bolum 6.5).
+  recipientPhone  String       @map("recipient_phone") @db.VarChar(16)
+  message         String       @db.VarChar(500)
+  status          OutboxStatus @default(PENDING)
+  attemptCount    Int          @default(0) @map("attempt_count")
+  nextAttemptAt   DateTime?    @map("next_attempt_at") @db.Timestamptz(6)
+  processedAt     DateTime?    @map("processed_at") @db.Timestamptz(6)
+  failedAt        DateTime?    @map("failed_at") @db.Timestamptz(6)
+  lastError       String?      @map("last_error") @db.VarChar(2000)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  // FK yok: OutboxEvent/AuditLog'daki "append-only, gevsek referans"
+  // felsefesiyle tutarli - sourceEventId bilgi amaclidir.
+  @@unique([sourceEventId, recipientPhone, channel])
+  @@index([status, nextAttemptAt])
+  @@map("notification_deliveries")
 }
