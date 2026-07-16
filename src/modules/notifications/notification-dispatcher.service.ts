@@ -3,12 +3,15 @@ import type { z } from 'zod';
 import { DOMAIN_AUDIT_ACTIONS } from '../../common/constants/domain-audit-actions.constant';
 import { AuditWriter } from '../../infrastructure/audit/audit-writer.service';
 import { PrismaService } from '../../infrastructure/database/prisma/prisma.service';
+import { MembershipQueryService } from '../memberships/membership-query.service';
 import type { RecipientContact } from '../users/services/user-contact-lookup.service';
 import { UserContactLookupService } from '../users/services/user-contact-lookup.service';
 import { SMS_METHODS, type SmsMethod } from './constants/sms-method.constant';
 import { NonRetryableDispatchError } from './errors/dispatch-error';
 import {
+  contractExpiringPayloadSchema,
   emergencyTicketCreatedPayloadSchema,
+  invoiceOverduePayloadSchema,
   technicianAssignedPayloadSchema,
 } from './schemas/outbox-payload.schemas';
 
@@ -32,6 +35,7 @@ export class NotificationDispatcher {
   constructor(
     private readonly prisma: PrismaService,
     private readonly userContacts: UserContactLookupService,
+    private readonly membershipQuery: MembershipQueryService,
     private readonly audit: AuditWriter,
   ) {}
 
@@ -41,6 +45,10 @@ export class NotificationDispatcher {
         return this.fanOutEmergencyTicketCreated(event);
       case 'TechnicianAssigned':
         return this.fanOutTechnicianAssigned(event);
+      case 'ContractExpiring':
+        return this.fanOutContractExpiring(event);
+      case 'InvoiceOverdue':
+        return this.fanOutInvoiceOverdue(event);
       default:
         // Faz 8 itibariyla outbox_events tek onayli tuketicilidir
         // (NotificationsModule) - tanmimayan/ilgisiz eventType payload'a
@@ -70,6 +78,44 @@ export class NotificationDispatcher {
       SMS_METHODS.TICKET_NOTIFICATION,
       message,
     );
+  }
+
+  private async fanOutContractExpiring(event: ClaimedOutboxEvent): Promise<void> {
+    const payload = this.parse(contractExpiringPayloadSchema, event);
+    const recipients = await this.resolveSiteManagersAndOperations(payload.siteId);
+    const message = `Sozlesme ${payload.contractNumber} ${payload.endDate} tarihinde sona eriyor.`;
+    await this.commitFanOut(
+      event,
+      dedupeByPhone(recipients),
+      SMS_METHODS.TICKET_NOTIFICATION,
+      message,
+    );
+  }
+
+  private async fanOutInvoiceOverdue(event: ClaimedOutboxEvent): Promise<void> {
+    const payload = this.parse(invoiceOverduePayloadSchema, event);
+    const recipients = await this.resolveSiteManagersAndOperations(payload.siteId);
+    const message = `Fatura ${payload.invoiceNumber} vadesi (${payload.dueDate}) gecti.`;
+    await this.commitFanOut(
+      event,
+      dedupeByPhone(recipients),
+      SMS_METHODS.TICKET_NOTIFICATION,
+      message,
+    );
+  }
+
+  // Plan Bolum 6.4/6.5: ContractExpiring/InvoiceOverdue ortak alici kapsami
+  // - ilgili site'nin aktif SITE_MANAGER'lari + aktif tum OPERATIONS. Baska
+  // bir site'nin yoneticisi asla dahil olmaz (listActiveManagerUserIds
+  // siteId ile filtrelenir). Telefon-bazli dedup commitFanOut'tan once
+  // cagiran tarafta (dedupeByPhone) yapilir.
+  private async resolveSiteManagersAndOperations(siteId: string): Promise<RecipientContact[]> {
+    const [managerUserIds, operations] = await Promise.all([
+      this.membershipQuery.listActiveManagerUserIds(siteId),
+      this.userContacts.listActiveOperationsPhones(),
+    ]);
+    const managers = await this.userContacts.findActivePhonesByIds(managerUserIds);
+    return [...managers, ...operations];
   }
 
   private parse<T>(schema: z.ZodType<T>, event: ClaimedOutboxEvent): T {

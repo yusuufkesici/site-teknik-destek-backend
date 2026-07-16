@@ -45,6 +45,7 @@ describe('validateEnv - OUTBOX_RELAY_ENABLED', () => {
       SMS_API_URL: 'https://sms.example',
       SMS_API_KEY: 'k',
       OUTBOX_RELAY_ENABLED: 'false',
+      BACKGROUND_JOBS_ENABLED: 'false',
     });
 
     const result = validateEnv(env);
@@ -58,6 +59,7 @@ describe('validateEnv - OUTBOX_RELAY_ENABLED', () => {
       SMS_API_URL: 'https://sms.example',
       SMS_API_KEY: 'k',
       OUTBOX_RELAY_ENABLED: 'true',
+      BACKGROUND_JOBS_ENABLED: 'false',
     });
 
     const result = validateEnv(env);
@@ -76,5 +78,89 @@ describe('validateEnv - OUTBOX_RELAY_ENABLED', () => {
 
     const result = validateEnv(env);
     expect(result.OUTBOX_RELAY_ENABLED).toBeUndefined();
+  });
+});
+
+// Faz 8 (plan Bolum 10.1/13): BACKGROUND_JOBS_ENABLED, OUTBOX_RELAY_ENABLED
+// ile AYNI production-zorunlu desenini kullanir (iki tarama job'unu
+// kapatan bagimsiz kill-switch).
+describe('validateEnv - BACKGROUND_JOBS_ENABLED', () => {
+  it('production + BACKGROUND_JOBS_ENABLED verilmemis: dogrulama BASARISIZ olur (sessiz varsayilan yok)', () => {
+    const env = baseEnv({
+      NODE_ENV: 'production',
+      SMS_PROVIDER: 'external',
+      SMS_API_URL: 'https://sms.example',
+      SMS_API_KEY: 'k',
+      OUTBOX_RELAY_ENABLED: 'false',
+    });
+
+    expect(() => validateEnv(env)).toThrow(/BACKGROUND_JOBS_ENABLED/);
+  });
+
+  it('production + BACKGROUND_JOBS_ENABLED=false: dogrulama BASARILI olur', () => {
+    const env = baseEnv({
+      NODE_ENV: 'production',
+      SMS_PROVIDER: 'external',
+      SMS_API_URL: 'https://sms.example',
+      SMS_API_KEY: 'k',
+      OUTBOX_RELAY_ENABLED: 'false',
+      BACKGROUND_JOBS_ENABLED: 'false',
+    });
+
+    const result = validateEnv(env);
+    expect(result.BACKGROUND_JOBS_ENABLED).toBe('false');
+  });
+
+  it('production + BACKGROUND_JOBS_ENABLED=true: dogrulama BASARILI olur (acikca verildigi surece)', () => {
+    const env = baseEnv({
+      NODE_ENV: 'production',
+      SMS_PROVIDER: 'external',
+      SMS_API_URL: 'https://sms.example',
+      SMS_API_KEY: 'k',
+      OUTBOX_RELAY_ENABLED: 'false',
+      BACKGROUND_JOBS_ENABLED: 'true',
+    });
+
+    const result = validateEnv(env);
+    expect(result.BACKGROUND_JOBS_ENABLED).toBe('true');
+  });
+
+  it('development + BACKGROUND_JOBS_ENABLED verilmemis: dogrulama BASARILI olur (production-disi zorunluluk yok)', () => {
+    const env = baseEnv();
+
+    const result = validateEnv(env);
+    expect(result.BACKGROUND_JOBS_ENABLED).toBeUndefined();
+  });
+
+  it('test + BACKGROUND_JOBS_ENABLED verilmemis: dogrulama BASARILI olur', () => {
+    const env = baseEnv({ NODE_ENV: 'test' });
+
+    const result = validateEnv(env);
+    expect(result.BACKGROUND_JOBS_ENABLED).toBeUndefined();
+  });
+});
+
+// Faz 8 (plan Bolum 7.2/13): CONTRACT_EXPIRY_LEAD_DAYS pozitif tam sayi,
+// verilmezse varsayilan 30 (production dahil - OUTBOX_RELAY_ENABLED/
+// BACKGROUND_JOBS_ENABLED'in aksine bu bir kill-switch degil, sessiz
+// varsayilani production'da da guvenlidir).
+describe('validateEnv - CONTRACT_EXPIRY_LEAD_DAYS', () => {
+  it('verilmemis: varsayilan 30 kullanilir', () => {
+    const result = validateEnv(baseEnv());
+    expect(result.CONTRACT_EXPIRY_LEAD_DAYS).toBe(30);
+  });
+
+  it('gecerli pozitif tam sayi kabul edilir', () => {
+    const result = validateEnv(baseEnv({ CONTRACT_EXPIRY_LEAD_DAYS: '45' }));
+    expect(result.CONTRACT_EXPIRY_LEAD_DAYS).toBe(45);
+  });
+
+  it('sifir veya negatif deger reddedilir', () => {
+    expect(() => validateEnv(baseEnv({ CONTRACT_EXPIRY_LEAD_DAYS: '0' }))).toThrow(
+      /CONTRACT_EXPIRY_LEAD_DAYS/,
+    );
+    expect(() => validateEnv(baseEnv({ CONTRACT_EXPIRY_LEAD_DAYS: '-5' }))).toThrow(
+      /CONTRACT_EXPIRY_LEAD_DAYS/,
+    );
   });
 });

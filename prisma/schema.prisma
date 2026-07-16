@@ -449,6 +449,11 @@ model Contract {
   updatedAt                   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
   terminatedAt                DateTime?      @map("terminated_at") @db.Timestamptz(6)
   terminationReason           String?        @map("termination_reason") @db.VarChar(1000)
+  // Faz 8 (onaylanan docs/phase-8-plan.md Bolum 7.2/8): ContractExpiringScanJob'un
+  // "ayni expiry donemi icin tek event" bayragi. endDate degistiginde veya
+  // ACTIVE-disi bir durumdan ACTIVE'e yeniden girildiginde null'a sifirlanir
+  // (ContractService.update).
+  expiryNotifiedAt            DateTime?      @map("expiry_notified_at") @db.Timestamptz(6)
 
   site      Facility          @relation(fields: [siteId], references: [id], onDelete: Restrict)
   createdBy User              @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
@@ -456,6 +461,10 @@ model Contract {
 
   // EXCLUDE (aktif sozlesmeler icin tarih araligi cakismasi) -> custom_constraints migration
   @@index([siteId, status])
+  // Faz 8: ContractExpiringScanJob aday sorgusu icin (status='ACTIVE' AND
+  // end_date araligi) - ContractInvoice'daki @@index([status, dueDate])
+  // emsaliyle tutarli.
+  @@index([status, endDate])
   @@map("contracts")
 }
 

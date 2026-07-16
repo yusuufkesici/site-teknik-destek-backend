@@ -5,6 +5,8 @@ import { ScheduleModule } from '@nestjs/schedule';
 import {
   appConfig,
   authConfig,
+  backgroundJobsConfig,
+  contractsConfig,
   corsConfig,
   databaseConfig,
   loggingConfig,
@@ -43,6 +45,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
         ticketsConfig,
         storageConfig,
         outboxRelayConfig,
+        contractsConfig,
+        backgroundJobsConfig,
       ],
     }),
     // Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 3.2/10.1):

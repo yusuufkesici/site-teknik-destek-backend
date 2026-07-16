@@ -34,11 +34,15 @@ export const DOMAIN_AUDIT_ACTIONS = {
   INVOICE_ISSUED: 'INVOICE_ISSUED',
   INVOICE_PAID: 'INVOICE_PAID',
   INVOICE_CANCELLED: 'INVOICE_CANCELLED',
-  // Faz 8 Dilim 1 (Notifications + Outbox Relay) — onaylanan
-  // docs/phase-8-plan.md Bolum 5/9/11.
+  // Faz 8 (Notifications + Outbox Relay) — onaylanan docs/phase-8-plan.md
+  // Bolum 5/9/11.
   OUTBOX_EVENT_FAILED: 'OUTBOX_EVENT_FAILED',
   NOTIFICATION_DELIVERY_FAILED: 'NOTIFICATION_DELIVERY_FAILED',
   NOTIFICATION_FANOUT_NO_RECIPIENTS: 'NOTIFICATION_FANOUT_NO_RECIPIENTS',
+  // Faz 8 (ContractExpiring/InvoiceOverdue tarama job'lari) — onaylanan
+  // docs/phase-8-plan.md Bolum 7.
+  INVOICE_OVERDUE: 'INVOICE_OVERDUE',
+  CONTRACT_EXPIRING_NOTIFIED: 'CONTRACT_EXPIRING_NOTIFIED',
 } as const;
 
 export type DomainAuditAction = (typeof DOMAIN_AUDIT_ACTIONS)[keyof typeof DOMAIN_AUDIT_ACTIONS];

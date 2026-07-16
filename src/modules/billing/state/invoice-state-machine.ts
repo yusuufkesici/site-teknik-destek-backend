@@ -45,4 +45,21 @@ export class InvoiceStateMachine {
       );
     }
   }
+
+  // Faz 8 (onaylanan docs/phase-8-plan.md Bolum 7.1/Revizyon karar #4):
+  // OVERDUE'ya YALNIZ sistem-tetiklemeli InvoiceOverdueScanJob ulasir -
+  // actor/API yolu (changeStatus -> assertTransition) bu metodu HICBIR
+  // SEKILDE kullanmaz, dolayisiyla assertTransition'daki "OVERDUE'ya
+  // manuel gecis kapali" guard'i etkilenmez/zayiflamaz. Ayri bir metot
+  // olmasinin nedeni tam olarak budur.
+  assertSystemOverdueTransition(from: InvoiceStatus): void {
+    if (from !== 'ISSUED') {
+      throw new DomainError(
+        ERROR_CODES.INVOICE_INVALID_STATUS_TRANSITION,
+        HttpStatus.CONFLICT,
+        `Sistem kaynakli OVERDUE gecisi yalniz ISSUED durumundan yapilabilir (mevcut: ${from}).`,
+        { from, to: 'OVERDUE' },
+      );
+    }
+  }
 }

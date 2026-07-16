@@ -89,6 +89,27 @@ export const outboxRelayConfig = registerAs('outboxRelay', () => {
   };
 });
 
+// Faz 8 (onaylanan docs/phase-8-plan.md Bolum 7.2/onay durumu #3):
+// ContractExpiringScanJob'un uyari penceresi esigi.
+export const contractsConfig = registerAs('contracts', () => {
+  const env = getValidatedEnv();
+  return {
+    expiryLeadDays: env.CONTRACT_EXPIRY_LEAD_DAYS,
+  };
+});
+
+// Faz 8: InvoiceOverdueScanJob/ContractExpiringScanJob kill-switch'i -
+// outboxRelayConfig.enabled ile BIREBIR ayni desen/gerekce (yukaridaki
+// yorum): production'da superRefine zorunlu kilar, gercek varsayilan
+// (true) yalniz development/test rahatligi icin burada uygulanir.
+export const backgroundJobsConfig = registerAs('backgroundJobs', () => {
+  const env = getValidatedEnv();
+  const backgroundJobsEnabledRaw = env.BACKGROUND_JOBS_ENABLED ?? 'true';
+  return {
+    enabled: env.NODE_ENV !== 'test' && backgroundJobsEnabledRaw === 'true',
+  };
+});
+
 export const storageConfig = registerAs('storage', () => {
   const env = getValidatedEnv();
   return {

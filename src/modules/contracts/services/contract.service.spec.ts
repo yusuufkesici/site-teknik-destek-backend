@@ -40,6 +40,7 @@ function contractRow(overrides: Record<string, unknown> = {}) {
     updatedAt: new Date(),
     terminatedAt: null,
     terminationReason: null,
+    expiryNotifiedAt: null,
     ...overrides,
   };
 }
@@ -64,6 +65,11 @@ function buildService() {
         Promise.resolve(contractRow({ id, ...data })),
       ),
     countNonCancelledInvoicesBeyond: jest.fn().mockResolvedValue(0),
+    markExpiringNotified: jest
+      .fn()
+      .mockImplementation((_tx: unknown, id: string) =>
+        Promise.resolve(contractRow({ id, expiryNotifiedAt: new Date() })),
+      ),
     list: jest.fn().mockResolvedValue([]),
   };
   const facilityRepo = {
@@ -418,6 +424,58 @@ describe('ContractService.update - birlesik PATCH sirasi', () => {
     });
   });
 
+  describe('Faz 8 (plan Bolum 7.2): expiryNotifiedAt sifirlama kurallari', () => {
+    it('endDate degisince expiryNotifiedAt sifirlanir (DRAFT, status degismeden)', async () => {
+      const { service, contractRepo } = buildService();
+      contractRepo.findByIdForUpdate.mockResolvedValue(
+        contractRow({ status: 'DRAFT', expiryNotifiedAt: new Date('2026-01-01T00:00:00Z') }),
+      );
+      await service.update(OPS_ACTOR, 'contract-1', { endDate: '2099-06-30' });
+      const updateArg = contractRepo.update.mock.calls[0][2];
+      expect(updateArg.expiryNotifiedAt).toBeNull();
+    });
+
+    it('SUSPENDED -> ACTIVE (ACTIVE-disi durumdan yeniden giris) expiryNotifiedAt sifirlanir', async () => {
+      const { service, contractRepo } = buildService();
+      contractRepo.findByIdForUpdate.mockResolvedValue(
+        contractRow({ status: 'SUSPENDED', expiryNotifiedAt: new Date('2026-01-01T00:00:00Z') }),
+      );
+      await service.update(OPS_ACTOR, 'contract-1', { status: 'ACTIVE' });
+      const updateArg = contractRepo.update.mock.calls[0][2];
+      expect(updateArg.expiryNotifiedAt).toBeNull();
+    });
+
+    it('DRAFT -> ACTIVE (aktivasyon) expiryNotifiedAt sifirlanir', async () => {
+      const { service, contractRepo } = buildService();
+      contractRepo.findByIdForUpdate.mockResolvedValue(
+        contractRow({ status: 'DRAFT', expiryNotifiedAt: null }),
+      );
+      await service.update(OPS_ACTOR, 'contract-1', { status: 'ACTIVE' });
+      const updateArg = contractRepo.update.mock.calls[0][2];
+      expect(updateArg.expiryNotifiedAt).toBeNull();
+    });
+
+    it('ne endDate ne status degisirse expiryNotifiedAt updateData icinde hic yer almaz (dokunulmaz)', async () => {
+      const { service, contractRepo } = buildService();
+      contractRepo.findByIdForUpdate.mockResolvedValue(
+        contractRow({ status: 'ACTIVE', expiryNotifiedAt: new Date('2026-01-01T00:00:00Z') }),
+      );
+      await service.update(OPS_ACTOR, 'contract-1', { notes: 'sadece not degisti' });
+      const updateArg = contractRepo.update.mock.calls[0][2];
+      expect('expiryNotifiedAt' in updateArg).toBe(false);
+    });
+
+    it('ACTIVE -> SUSPENDED (ACTIVE DISINA cikis) expiryNotifiedAt updateData icinde yer almaz', async () => {
+      const { service, contractRepo } = buildService();
+      contractRepo.findByIdForUpdate.mockResolvedValue(
+        contractRow({ status: 'ACTIVE', expiryNotifiedAt: new Date('2026-01-01T00:00:00Z') }),
+      );
+      await service.update(OPS_ACTOR, 'contract-1', { status: 'SUSPENDED' });
+      const updateArg = contractRepo.update.mock.calls[0][2];
+      expect('expiryNotifiedAt' in updateArg).toBe(false);
+    });
+  });
+
   describe('adim 10: DB constraint hata eslemesi (spike sekilleriyle)', () => {
     it('23P01 excl_contracts_active_overlap -> 409 CONTRACT_OVERLAP (capraz-satir yarisi backstop)', async () => {
       const { service, contractRepo } = buildService();
@@ -534,6 +592,115 @@ describe('ContractService.update - birlesik PATCH sirasi', () => {
       expect(JSON.stringify(auditEntry.metadata)).not.toContain('GIZLI');
       expect(JSON.stringify(outbox.publishInTx.mock.calls[0][1].payload)).not.toContain('GIZLI');
     });
+  });
+});
+
+describe('ContractService.markExpiringNotifiedBySystem', () => {
+  it('ACTIVE + pencere icinde + hic bildirilmemis: markExpiringNotified cagirir, audit+outbox ayni tx icinde', async () => {
+    const { service, contractRepo, prisma, audit, outbox } = buildService();
+    const today = new Date(
+      Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()),
+    );
+    const endDate = new Date(today.getTime() + 10 * 86_400_000); // 10 gun sonra
+    contractRepo.findByIdForUpdate.mockResolvedValue(
+      contractRow({ status: 'ACTIVE', endDate, expiryNotifiedAt: null }),
+    );
+
+    const result = await service.markExpiringNotifiedBySystem('contract-1', 'site-1', 30);
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(contractRepo.markExpiringNotified).toHaveBeenCalledWith('tx', 'contract-1');
+    expect(result).not.toBeNull();
+    expect(audit.log.mock.calls[0][1]).toMatchObject({
+      action: 'CONTRACT_EXPIRING_NOTIFIED',
+      entityType: 'Contract',
+      entityId: 'contract-1',
+      siteId: 'site-1',
+    });
+    expect(outbox.publishInTx.mock.calls[0][1]).toMatchObject({
+      eventType: 'ContractExpiring',
+      aggregateType: 'Contract',
+      aggregateId: 'contract-1',
+      payload: expect.objectContaining({ contractId: 'contract-1', siteId: 'site-1' }),
+    });
+  });
+
+  it('pencere disindaki (leadDays asan) sozlesme dokunulmadan atlanir: null doner', async () => {
+    const { service, contractRepo } = buildService();
+    const today = new Date(
+      Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()),
+    );
+    const farEndDate = new Date(today.getTime() + 60 * 86_400_000); // 60 gun sonra, leadDays=30 disinda
+    contractRepo.findByIdForUpdate.mockResolvedValue(
+      contractRow({ status: 'ACTIVE', endDate: farEndDate, expiryNotifiedAt: null }),
+    );
+
+    const result = await service.markExpiringNotifiedBySystem('contract-1', 'site-1', 30);
+
+    expect(result).toBeNull();
+    expect(contractRepo.markExpiringNotified).not.toHaveBeenCalled();
+  });
+
+  it.each<ContractStatus>(['DRAFT', 'SUSPENDED', 'EXPIRED', 'TERMINATED'])(
+    '%s durumundaki sozlesme dokunulmadan atlanir',
+    async (status) => {
+      const { service, contractRepo } = buildService();
+      const today = new Date(
+        Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()),
+      );
+      const endDate = new Date(today.getTime() + 10 * 86_400_000);
+      contractRepo.findByIdForUpdate.mockResolvedValue(
+        contractRow({ status, endDate, expiryNotifiedAt: null }),
+      );
+
+      const result = await service.markExpiringNotifiedBySystem('contract-1', 'site-1', 30);
+
+      expect(result).toBeNull();
+      expect(contractRepo.markExpiringNotified).not.toHaveBeenCalled();
+    },
+  );
+
+  it('expiryNotifiedAt zaten set edilmis sozlesme tekrar bildirilmez (retroaktif degil): null doner', async () => {
+    const { service, contractRepo } = buildService();
+    const today = new Date(
+      Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()),
+    );
+    const endDate = new Date(today.getTime() + 10 * 86_400_000);
+    contractRepo.findByIdForUpdate.mockResolvedValue(
+      contractRow({
+        status: 'ACTIVE',
+        endDate,
+        expiryNotifiedAt: new Date('2026-01-01T00:00:00Z'),
+      }),
+    );
+
+    const result = await service.markExpiringNotifiedBySystem('contract-1', 'site-1', 30);
+
+    expect(result).toBeNull();
+    expect(contractRepo.markExpiringNotified).not.toHaveBeenCalled();
+  });
+
+  it('sozlesme bulunamazsa null doner, hata firlatilmaz', async () => {
+    const { service, contractRepo } = buildService();
+    contractRepo.findByIdForUpdate.mockResolvedValue(null);
+    const result = await service.markExpiringNotifiedBySystem('yok', 'site-1', 30);
+    expect(result).toBeNull();
+  });
+
+  it('transaction hata firlatirsa yan etkiler kalici olmaz (rollback)', async () => {
+    const { service, contractRepo } = buildService();
+    const today = new Date(
+      Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()),
+    );
+    const endDate = new Date(today.getTime() + 10 * 86_400_000);
+    contractRepo.findByIdForUpdate.mockResolvedValue(
+      contractRow({ status: 'ACTIVE', endDate, expiryNotifiedAt: null }),
+    );
+    contractRepo.markExpiringNotified.mockRejectedValue(new Error('DB baglanti hatasi'));
+
+    await expect(service.markExpiringNotifiedBySystem('contract-1', 'site-1', 30)).rejects.toThrow(
+      'DB baglanti hatasi',
+    );
   });
 });
 

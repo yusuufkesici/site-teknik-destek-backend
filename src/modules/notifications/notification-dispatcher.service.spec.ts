@@ -7,6 +7,9 @@ const FACILITY_ID = '33333333-3333-4333-8333-333333333333';
 const CREATED_BY_ID = '44444444-4444-4444-8444-444444444444';
 const ASSIGNMENT_ID = '55555555-5555-4555-8555-555555555555';
 const TECHNICIAN_ID = '66666666-6666-4666-8666-666666666666';
+const CONTRACT_ID = '77777777-7777-4777-8777-777777777777';
+const INVOICE_ID = '88888888-8888-4888-8888-888888888888';
+const MANAGER_ID = '99999999-9999-4999-8999-999999999999';
 
 function buildDispatcher() {
   const tx = {
@@ -22,15 +25,19 @@ function buildDispatcher() {
     findActivePhoneById: jest.fn().mockResolvedValue(null),
     findActivePhonesByIds: jest.fn().mockResolvedValue([]),
   };
+  const membershipQuery = {
+    listActiveManagerUserIds: jest.fn().mockResolvedValue([]),
+  };
   const audit = { log: jest.fn().mockResolvedValue(undefined) };
 
   const dispatcher = new NotificationDispatcher(
     prisma as never,
     userContacts as never,
+    membershipQuery as never,
     audit as never,
   );
 
-  return { dispatcher, prisma, tx, userContacts, audit };
+  return { dispatcher, prisma, tx, userContacts, membershipQuery, audit };
 }
 
 function emergencyEvent(payloadOverrides: Record<string, unknown> = {}): ClaimedOutboxEvent {
@@ -65,6 +72,39 @@ function technicianAssignedEvent(
       assignmentId: ASSIGNMENT_ID,
       technicianId: TECHNICIAN_ID,
       reassigned: false,
+      ...payloadOverrides,
+    },
+  };
+}
+
+function contractExpiringEvent(payloadOverrides: Record<string, unknown> = {}): ClaimedOutboxEvent {
+  return {
+    id: 'event-4',
+    eventType: 'ContractExpiring',
+    aggregateType: 'Contract',
+    aggregateId: CONTRACT_ID,
+    payload: {
+      contractId: CONTRACT_ID,
+      contractNumber: 'CNT-2026-000001',
+      siteId: SITE_ID,
+      endDate: '2026-08-15',
+      ...payloadOverrides,
+    },
+  };
+}
+
+function invoiceOverdueEvent(payloadOverrides: Record<string, unknown> = {}): ClaimedOutboxEvent {
+  return {
+    id: 'event-5',
+    eventType: 'InvoiceOverdue',
+    aggregateType: 'ContractInvoice',
+    aggregateId: INVOICE_ID,
+    payload: {
+      invoiceId: INVOICE_ID,
+      contractId: CONTRACT_ID,
+      siteId: SITE_ID,
+      invoiceNumber: 'INV-2026-000001',
+      dueDate: '2026-07-01',
       ...payloadOverrides,
     },
   };
@@ -166,6 +206,84 @@ describe('NotificationDispatcher.fanOut', () => {
     await expect(dispatcher.fanOut(malformed)).rejects.toBeInstanceOf(NonRetryableDispatchError);
     expect(prisma.$transaction).not.toHaveBeenCalled();
     expect(tx.notificationDelivery.create).not.toHaveBeenCalled();
+  });
+
+  it('ContractExpiring: site MANAGER + aktif OPERATIONS alicilarina, telefona gore dedupe edilerek tek delivery gider', async () => {
+    const { dispatcher, tx, userContacts, membershipQuery } = buildDispatcher();
+    membershipQuery.listActiveManagerUserIds.mockResolvedValue([MANAGER_ID]);
+    userContacts.findActivePhonesByIds.mockResolvedValue([
+      { userId: MANAGER_ID, phoneNumber: '+905551110003' },
+    ]);
+    userContacts.listActiveOperationsPhones.mockResolvedValue([
+      { userId: 'ops-1', phoneNumber: '+905551110003' },
+    ]);
+
+    await dispatcher.fanOut(contractExpiringEvent());
+
+    expect(membershipQuery.listActiveManagerUserIds).toHaveBeenCalledWith(SITE_ID);
+    expect(tx.notificationDelivery.create).toHaveBeenCalledTimes(1);
+    expect(tx.notificationDelivery.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sourceEventId: 'event-4',
+        sourceEventType: 'ContractExpiring',
+        smsMethod: 'TICKET_NOTIFICATION',
+        recipientPhone: '+905551110003',
+      }),
+    });
+  });
+
+  it('ContractExpiring: baska bir sitenin yoneticisi alici listesine hic dahil olmaz', async () => {
+    const { dispatcher, membershipQuery } = buildDispatcher();
+    membershipQuery.listActiveManagerUserIds.mockResolvedValue([]);
+
+    await dispatcher.fanOut(contractExpiringEvent());
+
+    expect(membershipQuery.listActiveManagerUserIds).toHaveBeenCalledWith(SITE_ID);
+    expect(membershipQuery.listActiveManagerUserIds).not.toHaveBeenCalledWith(
+      expect.not.stringMatching(SITE_ID),
+    );
+  });
+
+  it('InvoiceOverdue: site MANAGER + aktif OPERATIONS alicilarina delivery olusturur', async () => {
+    const { dispatcher, tx, userContacts, membershipQuery } = buildDispatcher();
+    membershipQuery.listActiveManagerUserIds.mockResolvedValue([MANAGER_ID]);
+    userContacts.findActivePhonesByIds.mockResolvedValue([
+      { userId: MANAGER_ID, phoneNumber: '+905551110004' },
+    ]);
+
+    await dispatcher.fanOut(invoiceOverdueEvent());
+
+    expect(userContacts.findActivePhonesByIds).toHaveBeenCalledWith([MANAGER_ID]);
+    expect(tx.notificationDelivery.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sourceEventId: 'event-5',
+        sourceEventType: 'InvoiceOverdue',
+        smsMethod: 'TICKET_NOTIFICATION',
+        recipientPhone: '+905551110004',
+      }),
+    });
+  });
+
+  it('InvoiceOverdue: sifir alici cozumlenirse PROCESSED + recipientCount:0 audit yazilir', async () => {
+    const { dispatcher, tx, audit } = buildDispatcher();
+
+    await dispatcher.fanOut(invoiceOverdueEvent());
+
+    expect(tx.notificationDelivery.create).not.toHaveBeenCalled();
+    expect(audit.log).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        metadata: { eventType: 'InvoiceOverdue', recipientCount: 0 },
+      }),
+    );
+  });
+
+  it('Bozuk ContractExpiring payload: NonRetryableDispatchError firlatir, hicbir DB yazimi yapilmaz', async () => {
+    const { dispatcher, prisma } = buildDispatcher();
+    const malformed = contractExpiringEvent({ contractId: 'not-a-uuid' });
+
+    await expect(dispatcher.fanOut(malformed)).rejects.toBeInstanceOf(NonRetryableDispatchError);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it('Tanınmayan eventType: payload hic okunmadan dogrudan PROCESSED isaretlenir (no-op)', async () => {

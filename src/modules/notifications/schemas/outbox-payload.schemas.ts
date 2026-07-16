@@ -1,8 +1,8 @@
 import { z } from 'zod';
 
-// Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 4): yalniz bu dilimde
-// islenen 2 eventType icin sema. ContractExpiring/InvoiceOverdue semalari
-// Dilim 2'de eklenecek - o eventType'lar henuz hic uretilmiyor.
+// Faz 8 (onaylanan docs/phase-8-plan.md Bolum 4): islenen 4 eventType icin
+// sema. Yalniz gerekli id/guvenli alanlar tasinir - tutar veya kisisel veri
+// outbox payload'ina yazilmaz.
 
 export const emergencyTicketCreatedPayloadSchema = z.object({
   ticketId: z.string().uuid(),
@@ -24,3 +24,22 @@ export const technicianAssignedPayloadSchema = z.object({
 });
 
 export type TechnicianAssignedPayload = z.infer<typeof technicianAssignedPayloadSchema>;
+
+export const contractExpiringPayloadSchema = z.object({
+  contractId: z.string().uuid(),
+  contractNumber: z.string(),
+  siteId: z.string().uuid(),
+  endDate: z.string(),
+});
+
+export type ContractExpiringPayload = z.infer<typeof contractExpiringPayloadSchema>;
+
+export const invoiceOverduePayloadSchema = z.object({
+  invoiceId: z.string().uuid(),
+  contractId: z.string().uuid(),
+  siteId: z.string().uuid(),
+  invoiceNumber: z.string(),
+  dueDate: z.string(),
+});
+
+export type InvoiceOverduePayload = z.infer<typeof invoiceOverduePayloadSchema>;

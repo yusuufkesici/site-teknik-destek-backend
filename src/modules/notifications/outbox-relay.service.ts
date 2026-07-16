@@ -6,9 +6,9 @@ import { AuditWriter } from '../../infrastructure/audit/audit-writer.service';
 import { PrismaService } from '../../infrastructure/database/prisma/prisma.service';
 import { NonRetryableDispatchError } from './errors/dispatch-error';
 import { NotificationDispatcher } from './notification-dispatcher.service';
+import { raceWithTimeout } from '../../common/utils/shutdown-drain.util';
 import { computeBackoffDelayMs } from './utils/backoff.util';
 import { readRelayConfig } from './utils/relay-config.util';
-import { raceWithTimeout } from './utils/shutdown-drain.util';
 
 const INTERVAL_NAME = 'outbox-relay-poll';
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 10_000;

@@ -12,9 +12,9 @@ import { AuditWriter } from '../../infrastructure/audit/audit-writer.service';
 import { PrismaService } from '../../infrastructure/database/prisma/prisma.service';
 import { SMS_PROVIDER, type SmsProvider } from '../../infrastructure/sms/sms-provider.interface';
 import { SMS_METHODS } from './constants/sms-method.constant';
+import { raceWithTimeout } from '../../common/utils/shutdown-drain.util';
 import { computeBackoffDelayMs } from './utils/backoff.util';
 import { readRelayConfig } from './utils/relay-config.util';
-import { raceWithTimeout } from './utils/shutdown-drain.util';
 
 const INTERVAL_NAME = 'notification-delivery-relay-poll';
 const SHUTDOWN_DRAIN_TIMEOUT_MS = 10_000;

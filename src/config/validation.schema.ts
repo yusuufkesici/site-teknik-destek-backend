@@ -62,6 +62,15 @@ const rawEnvSchema = z.object({
   // gercek varsayilan deger uygulamasi ise configuration.ts'teki
   // outboxRelayConfig'te (yalniz production-disi ortamlar icin) yapilir.
   OUTBOX_RELAY_ENABLED: z.enum(['true', 'false']).optional(),
+
+  // Faz 8 (onaylanan docs/phase-8-plan.md Bolum 13/onay durumu #3): is
+  // kurali esigi - EMERGENCY_SLA_HOURS emsali, sabit degil env'den okunur.
+  CONTRACT_EXPIRY_LEAD_DAYS: z.coerce.number().int().positive().default(30),
+  // ContractExpiringScanJob/InvoiceOverdueScanJob kill-switch'i -
+  // OUTBOX_RELAY_ENABLED ile AYNI gerekce/desen (bkz. yukaridaki yorum):
+  // z.coerce.boolean() kullanilmaz, alan seviyesinde varsayilan yok,
+  // production'da acikca verilmesi superRefine'da zorunlu kilinir.
+  BACKGROUND_JOBS_ENABLED: z.enum(['true', 'false']).optional(),
 });
 
 export const envSchema = rawEnvSchema.superRefine((env, ctx) => {
@@ -93,6 +102,17 @@ export const envSchema = rawEnvSchema.superRefine((env, ctx) => {
       path: ['OUTBOX_RELAY_ENABLED'],
       message:
         'Production ortaminda OUTBOX_RELAY_ENABLED acikca belirtilmelidir (true veya false) - varsayilan deger production icin kullanilamaz.',
+    });
+  }
+
+  // Faz 8: ayni fail-fast yaklasimi ContractExpiringScanJob/
+  // InvoiceOverdueScanJob kill-switch'i icin de gecerlidir.
+  if (env.NODE_ENV === 'production' && env.BACKGROUND_JOBS_ENABLED === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['BACKGROUND_JOBS_ENABLED'],
+      message:
+        'Production ortaminda BACKGROUND_JOBS_ENABLED acikca belirtilmelidir (true veya false) - varsayilan deger production icin kullanilamaz.',
     });
   }
 
