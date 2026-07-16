@@ -1,3 +1,6 @@
+// Prisma 7, prisma.config.ts kullanildiginda .env dosyasini otomatik
+// yuklemez; env('DATABASE_URL') cozulebilsin diye burada acikca yuklenir.
+import 'dotenv/config';
 import { defineConfig, env } from 'prisma/config';
 
 // Prisma CLI (migrate/introspect) icin baglanti URL'si burada tanimlanir;
