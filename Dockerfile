@@ -10,7 +10,12 @@ FROM node:24-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN npx prisma generate && npm run build && npm prune --omit=dev
+# prisma generate DB'ye baglanmaz ama prisma.config.ts env('DATABASE_URL')
+# cozulmeden yuklenemez (.env bilincli olarak .dockerignore'da). Yalniz bu
+# RUN adiminda gecerli sahte URL verilir; runtime imajina tasinmaz.
+RUN DATABASE_URL="postgresql://build:build@localhost:5432/build" npx prisma generate \
+  && npm run build \
+  && npm prune --omit=dev
 
 FROM node:24-alpine AS runtime
 WORKDIR /app
@@ -25,4 +30,8 @@ USER app
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
   CMD wget -qO- http://127.0.0.1:3000/api/v1/health/liveness || exit 1
-CMD ["node", "dist/main.js"]
+# nest build ciktisi dist/src/main.js uretir (tsconfig "include"/"rootDir"
+# tanimlamaz; kok dizindeki prisma.config.ts/jest.config.ts de derlendigi icin
+# rootDir proje koku olur). Giris noktasi bu gercek yola isaret etmelidir -
+# package.json start:prod ile ayni yol kullanilir.
+CMD ["node", "dist/src/main.js"]

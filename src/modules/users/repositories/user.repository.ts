@@ -3,6 +3,11 @@ import type { CursorPayload } from '../../../common/utils/pagination.util';
 import type { PrismaClientLike } from '../../../common/types/prisma-client-like.type';
 import type { UserRole } from '../../../generated/prisma-client/enums';
 
+export interface UserContactRow {
+  id: string;
+  phoneNumber: string;
+}
+
 export interface UserRow {
   id: string;
   phoneNumber: string;
@@ -80,6 +85,35 @@ export class UserRepository {
     return client.user.update({
       where: { id },
       data: { isActive: false },
+    });
+  }
+
+  // Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 3.2/6.5): bildirim
+  // alicisi cozumlemesi icin dar okuma metotlari. UsersModule disina
+  // DOGRUDAN acilmaz - tek yuzey UserContactLookupService'tir.
+  async findActivePhoneById(client: PrismaClientLike, id: string): Promise<UserContactRow | null> {
+    return client.user.findFirst({
+      where: { id, isActive: true, deletedAt: null },
+      select: { id: true, phoneNumber: true },
+    });
+  }
+
+  async findActivePhonesByIds(client: PrismaClientLike, ids: string[]): Promise<UserContactRow[]> {
+    if (ids.length === 0) return [];
+    return client.user.findMany({
+      where: { id: { in: ids }, isActive: true, deletedAt: null },
+      select: { id: true, phoneNumber: true },
+    });
+  }
+
+  // Acikca isimlendirilmis, role-scoped sorgu (implementation-overrides.md
+  // #3'un istedigi "OPERATIONS icin acikca adlandirilmis" deseni) - anonim
+  // "tum kullanicilar" sorgusu degildir. Mevcut @@index([role, isActive])
+  // kullanilir.
+  async listActiveByRole(client: PrismaClientLike, role: UserRole): Promise<UserContactRow[]> {
+    return client.user.findMany({
+      where: { role, isActive: true, deletedAt: null },
+      select: { id: true, phoneNumber: true },
     });
   }
 

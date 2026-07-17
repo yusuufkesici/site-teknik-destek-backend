@@ -1,3 +1,4 @@
+import { addUtcDays, utcToday } from '../../../common/utils/billable-window.util';
 import { Prisma } from '../../../generated/prisma-client/client';
 import type { ContractStatus, InvoiceStatus } from '../../../generated/prisma-client/enums';
 import { InvoiceStateMachine } from '../state/invoice-state-machine';
@@ -603,6 +604,98 @@ describe('InvoiceService.changeStatus', () => {
       expect(contractLookup.findById).toHaveBeenCalledWith('tx', 'contract-1');
       expect(audit.log.mock.calls[0][1].siteId).toBe('site-1');
     });
+  });
+});
+
+describe('InvoiceService.markOverdueBySystem', () => {
+  it('ISSUED + dueDate gecmis: OVERDUE yapar, audit+outbox ayni transaction icinde yazilir', async () => {
+    const { service, invoiceRepo, prisma, audit, outbox } = buildService();
+    const pastDue = addUtcDays(utcToday(), -1);
+    invoiceRepo.findByIdForUpdate.mockResolvedValue(
+      invoiceRow({ status: 'ISSUED', dueDate: pastDue }),
+    );
+
+    const result = await service.markOverdueBySystem('invoice-1', 'site-1');
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(invoiceRepo.updateStatus).toHaveBeenCalledWith('tx', 'invoice-1', { status: 'OVERDUE' });
+    expect(result?.status).toBe('OVERDUE');
+    expect(audit.log.mock.calls[0][1]).toMatchObject({
+      action: 'INVOICE_OVERDUE',
+      entityType: 'ContractInvoice',
+      entityId: 'invoice-1',
+      siteId: 'site-1',
+    });
+    expect(outbox.publishInTx.mock.calls[0][1]).toMatchObject({
+      eventType: 'InvoiceOverdue',
+      aggregateType: 'ContractInvoice',
+      aggregateId: 'invoice-1',
+      payload: expect.objectContaining({
+        invoiceId: 'invoice-1',
+        contractId: 'contract-1',
+        siteId: 'site-1',
+      }),
+    });
+  });
+
+  it('dueDate bugun veya gelecekte ise henuz vadesi gecmemistir: null doner, hicbir yazma yapilmaz', async () => {
+    const { service, invoiceRepo, audit, outbox } = buildService();
+    invoiceRepo.findByIdForUpdate.mockResolvedValue(
+      invoiceRow({ status: 'ISSUED', dueDate: utcToday() }),
+    );
+
+    const result = await service.markOverdueBySystem('invoice-1', 'site-1');
+
+    expect(result).toBeNull();
+    expect(invoiceRepo.updateStatus).not.toHaveBeenCalled();
+    expect(audit.log).not.toHaveBeenCalled();
+    expect(outbox.publishInTx).not.toHaveBeenCalled();
+  });
+
+  it.each<InvoiceStatus>(['PAID', 'CANCELLED', 'OVERDUE', 'DRAFT'])(
+    '%s durumundaki fatura dokunulmadan atlanir (baska worker/actor onceden cozmus olabilir)',
+    async (status) => {
+      const { service, invoiceRepo } = buildService();
+      const pastDue = addUtcDays(utcToday(), -5);
+      invoiceRepo.findByIdForUpdate.mockResolvedValue(invoiceRow({ status, dueDate: pastDue }));
+
+      const result = await service.markOverdueBySystem('invoice-1', 'site-1');
+
+      expect(result).toBeNull();
+      expect(invoiceRepo.updateStatus).not.toHaveBeenCalled();
+    },
+  );
+
+  it('fatura bulunamazsa (silinmis/yok) null doner, hata firlatilmaz', async () => {
+    const { service, invoiceRepo } = buildService();
+    invoiceRepo.findByIdForUpdate.mockResolvedValue(null);
+    const result = await service.markOverdueBySystem('yok', 'site-1');
+    expect(result).toBeNull();
+  });
+
+  it('siteId parametre olarak gelir; InvoiceRow siteId alanina hic erisilmez', async () => {
+    const { service, invoiceRepo, audit } = buildService();
+    const pastDue = addUtcDays(utcToday(), -1);
+    invoiceRepo.findByIdForUpdate.mockResolvedValue(
+      invoiceRow({ status: 'ISSUED', dueDate: pastDue }),
+    );
+    await service.markOverdueBySystem('invoice-1', 'site-42');
+    expect(audit.log.mock.calls[0][1].siteId).toBe('site-42');
+  });
+
+  it('transaction hata firlatirsa hicbir yan etki kalici olmaz (rollback)', async () => {
+    const { service, invoiceRepo, prisma } = buildService();
+    const pastDue = addUtcDays(utcToday(), -1);
+    invoiceRepo.findByIdForUpdate.mockResolvedValue(
+      invoiceRow({ status: 'ISSUED', dueDate: pastDue }),
+    );
+    invoiceRepo.updateStatus.mockRejectedValue(new Error('DB baglanti hatasi'));
+    prisma.$transaction.mockImplementationOnce(async (fn: (tx: string) => Promise<unknown>) =>
+      fn('tx'),
+    );
+    await expect(service.markOverdueBySystem('invoice-1', 'site-1')).rejects.toThrow(
+      'DB baglanti hatasi',
+    );
   });
 });
 

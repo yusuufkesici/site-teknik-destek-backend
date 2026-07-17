@@ -34,6 +34,12 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
+  // Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 1/10.1): bu
+  // olmadan OnModuleDestroy/OnApplicationShutdown SIGTERM/SIGINT'te hic
+  // tetiklenmez - OutboxRelay/NotificationDeliveryRelay'in graceful
+  // drain'i buna bagimlidir.
+  app.enableShutdownHooks();
+
   await app.listen(port);
 }
 

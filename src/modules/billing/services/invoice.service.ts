@@ -9,6 +9,7 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import {
   computeBillableWindowEnd,
   toUtcDateOnly,
+  utcToday,
 } from '../../../common/utils/billable-window.util';
 import {
   buildPage,
@@ -349,6 +350,52 @@ export class InvoiceService {
         },
       });
 
+      return updated;
+    });
+  }
+
+  // Faz 8 (onaylanan docs/phase-8-plan.md Bolum 7.1, kritik karar #4):
+  // InvoiceOverdueScanJob DISINDA hicbir yerden cagirilmaz - actor/API
+  // yolu (changeStatus) bu metodu hic bilmez, dolayisiyla assertTransition
+  // guard'i (OVERDUE'ya manuel gecis kapali) etkilenmez. InvoiceRow'da
+  // siteId alani YOKTUR (ContractInvoice'un kendi siteId'si yok, yalniz
+  // contract.siteId'den turer - implementation-overrides.md #3) - siteId
+  // caller'in (job) zaten sahip oldugu aday satirindan parametre olarak
+  // gelir, ekstra sorguya gerek yoktur. null donusu ("baska worker/actor
+  // zaten cozmus veya artik uygun degil") hata DEGILDIR - iki instance'in
+  // ayni faturayi cift islememesinin (idempotent-by-construction) temelidir.
+  async markOverdueBySystem(invoiceId: string, siteId: string): Promise<InvoiceRow | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const invoice = await this.invoiceRepo.findByIdForUpdate(tx, invoiceId);
+      if (!invoice) return null;
+      // Islem oncesinde statu/tarih kosullari transaction icinde TEKRAR
+      // dogrulanir - aday secimi kilitsizdi, bu satir kilitlendikten sonra
+      // durum degismis olabilir (baska worker/actor, ya da dueDate artik
+      // bugunku pencereye girmiyor).
+      if (invoice.status !== 'ISSUED' || invoice.dueDate >= utcToday()) {
+        return null;
+      }
+      this.stateMachine.assertSystemOverdueTransition(invoice.status);
+      const updated = await this.invoiceRepo.updateStatus(tx, invoiceId, { status: 'OVERDUE' });
+      await this.audit.log(tx, {
+        action: DOMAIN_AUDIT_ACTIONS.INVOICE_OVERDUE,
+        entityType: 'ContractInvoice',
+        entityId: invoiceId,
+        siteId,
+        metadata: { dueDate: invoice.dueDate.toISOString().slice(0, 10) },
+      });
+      await this.outbox.publishInTx(tx, {
+        eventType: 'InvoiceOverdue',
+        aggregateType: 'ContractInvoice',
+        aggregateId: invoiceId,
+        payload: {
+          invoiceId,
+          contractId: invoice.contractId,
+          siteId,
+          invoiceNumber: invoice.invoiceNumber,
+          dueDate: invoice.dueDate.toISOString().slice(0, 10),
+        },
+      });
       return updated;
     });
   }

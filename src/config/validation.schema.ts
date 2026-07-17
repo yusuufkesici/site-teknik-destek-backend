@@ -43,6 +43,34 @@ const rawEnvSchema = z.object({
   // Yalniz contract.emergencyCoverage=true iken kullanilir (onaylanan Faz 4
   // plani Bolum 16).
   EMERGENCY_SLA_HOURS: z.coerce.number().int().positive(),
+
+  // Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 13): OutboxRelay ve
+  // NotificationDeliveryRelay AYNI dort sayisal degeri paylasir (onaylanan
+  // karar #7). Operasyonel tuning degerleri - iş kurali esigi degil.
+  OUTBOX_RELAY_POLL_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
+  OUTBOX_RELAY_BATCH_SIZE: z.coerce.number().int().positive().default(20),
+  OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
+  OUTBOX_CLAIM_LEASE_MS: z.coerce.number().int().positive().default(60000),
+  // Kill-switch (plan Bolum 9.1/10.1). BILINCLI OLARAK z.coerce.boolean()
+  // KULLANILMAZ: Zod'da Boolean("false") === true oldugundan
+  // z.coerce.boolean() "false" string'ini de true'ya cevirir. Burada AYRICA
+  // varsayilan deger de field seviyesinde UYGULANMAZ (transform de yok) -
+  // ham string ('true'|'false'|undefined) olarak birakilir, cunku
+  // superRefine YALNIZ zaten parse/transform edilmis degeri gorebilir,
+  // "hic verilmedi" ile "explicit true verildi" ayrimini goremez. Production
+  // icin "acikca verilmemis" kontrolu bu yuzden asagidaki superRefine'da,
+  // gercek varsayilan deger uygulamasi ise configuration.ts'teki
+  // outboxRelayConfig'te (yalniz production-disi ortamlar icin) yapilir.
+  OUTBOX_RELAY_ENABLED: z.enum(['true', 'false']).optional(),
+
+  // Faz 8 (onaylanan docs/phase-8-plan.md Bolum 13/onay durumu #3): is
+  // kurali esigi - EMERGENCY_SLA_HOURS emsali, sabit degil env'den okunur.
+  CONTRACT_EXPIRY_LEAD_DAYS: z.coerce.number().int().positive().default(30),
+  // ContractExpiringScanJob/InvoiceOverdueScanJob kill-switch'i -
+  // OUTBOX_RELAY_ENABLED ile AYNI gerekce/desen (bkz. yukaridaki yorum):
+  // z.coerce.boolean() kullanilmaz, alan seviyesinde varsayilan yok,
+  // production'da acikca verilmesi superRefine'da zorunlu kilinir.
+  BACKGROUND_JOBS_ENABLED: z.enum(['true', 'false']).optional(),
 });
 
 export const envSchema = rawEnvSchema.superRefine((env, ctx) => {
@@ -60,6 +88,31 @@ export const envSchema = rawEnvSchema.superRefine((env, ctx) => {
       code: 'custom',
       path: ['SMS_PROVIDER'],
       message: 'Production ortaminda SMS_PROVIDER=mock kullanilamaz.',
+    });
+  }
+
+  // Faz 8 Dilim 1: production'da varsayilan deger KULLANILAMAZ - ilk
+  // deploy'da bu degiskenin unutulmasi relay'in sessizce acik baslamasina
+  // yol acabilirdi (docs/phase-8-plan.md Bolum 9.1 rollout onerisi: once
+  // false, backlog temizligi dogrulanip sonra true). Bu kontrol operatoru
+  // acik bir karar vermeye ZORLAR - fail-fast, sessiz varsayilan yok.
+  if (env.NODE_ENV === 'production' && env.OUTBOX_RELAY_ENABLED === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['OUTBOX_RELAY_ENABLED'],
+      message:
+        'Production ortaminda OUTBOX_RELAY_ENABLED acikca belirtilmelidir (true veya false) - varsayilan deger production icin kullanilamaz.',
+    });
+  }
+
+  // Faz 8: ayni fail-fast yaklasimi ContractExpiringScanJob/
+  // InvoiceOverdueScanJob kill-switch'i icin de gecerlidir.
+  if (env.NODE_ENV === 'production' && env.BACKGROUND_JOBS_ENABLED === undefined) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['BACKGROUND_JOBS_ENABLED'],
+      message:
+        'Production ortaminda BACKGROUND_JOBS_ENABLED acikca belirtilmelidir (true veya false) - varsayilan deger production icin kullanilamaz.',
     });
   }
 

@@ -7,6 +7,7 @@ import { ERROR_CODES } from '../../../common/constants/error-codes.constant';
 import { DomainError } from '../../../common/errors/domain-error';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user.type';
 import {
+  addUtcDays,
   computeBillableWindowEnd,
   toUtcDateOnly,
   utcToday,
@@ -294,6 +295,16 @@ export class ContractService {
         }
       }
 
+      // Faz 8 (onaylanan docs/phase-8-plan.md Bolum 7.2): expiryNotifiedAt
+      // sifirlama kurallari - (a) endDate degisimi, (b) ACTIVE-disi bir
+      // durumdan ACTIVE'e giris (assertTransition from===to'yu zaten
+      // reddettiginden dto.status==='ACTIVE' burada HER ZAMAN current.status
+      // !=='ACTIVE' anlamina gelir - ayri bir "eski durum" kontrolu
+      // gerekmez). Suspend sirasinda endDate otomatik uzamadigindan, yeniden
+      // aktive edilen bir sozlesme ayni/daha yakin bitis tarihine karsi taze
+      // bir uyari sansi almalidir.
+      const shouldResetExpiryNotified = endDateChanged || dto.status === 'ACTIVE';
+
       // 9) Tek update + 10) DB constraint hata eslemesi.
       const updateData: UpdateContractInput = {
         ...(dto.endDate !== undefined ? { endDate: finalEndDate } : {}),
@@ -310,6 +321,7 @@ export class ContractService {
         ...(dto.notes !== undefined ? { notes: dto.notes } : {}),
         ...(dto.status !== undefined ? { status: dto.status } : {}),
         ...(terminatedAt ? { terminatedAt, terminationReason: dto.terminationReason?.trim() } : {}),
+        ...(shouldResetExpiryNotified ? { expiryNotifiedAt: null } : {}),
       };
 
       let updated: ContractRow;
@@ -349,6 +361,57 @@ export class ContractService {
         },
       });
 
+      return updated;
+    });
+  }
+
+  // Faz 8 (onaylanan docs/phase-8-plan.md Bolum 7.2/9, kritik karar #12):
+  // ContractExpiringScanJob DISINDA hicbir yerden cagirilmaz. Aday secimi
+  // kilitsizdi (ContractRepository.findExpiringSoonAcrossSites) - bu satir
+  // kilitlendikten sonra statu/endDate/expiryNotifiedAt kosullari
+  // transaction icinde TEKRAR dogrulanir: baska worker zaten islemis
+  // olabilir, ya da islem sirasinda sozlesme guncellenmis (status/endDate
+  // degismis) olabilir - yanlis event uretilmemesi bunun icindir. null
+  // donusu hata DEGILDIR (idempotent-by-construction, plan Bolum 5.3
+  // gerekcesiyle ayni - gereksiz advisory lock yerine row-lock + recheck).
+  async markExpiringNotifiedBySystem(
+    contractId: string,
+    siteId: string,
+    leadDays: number,
+  ): Promise<ContractRow | null> {
+    return this.prisma.$transaction(async (tx) => {
+      const contract = await this.contractRepo.findByIdForUpdate(tx, contractId);
+      if (!contract) return null;
+
+      const today = utcToday();
+      const windowEnd = addUtcDays(today, leadDays);
+      const withinWindow =
+        contract.endDate.getTime() >= today.getTime() &&
+        contract.endDate.getTime() <= windowEnd.getTime();
+
+      if (contract.status !== 'ACTIVE' || contract.expiryNotifiedAt !== null || !withinWindow) {
+        return null;
+      }
+
+      const updated = await this.contractRepo.markExpiringNotified(tx, contractId);
+      await this.audit.log(tx, {
+        action: DOMAIN_AUDIT_ACTIONS.CONTRACT_EXPIRING_NOTIFIED,
+        entityType: 'Contract',
+        entityId: contractId,
+        siteId,
+        metadata: { endDate: contract.endDate.toISOString().slice(0, 10) },
+      });
+      await this.outbox.publishInTx(tx, {
+        eventType: 'ContractExpiring',
+        aggregateType: 'Contract',
+        aggregateId: contractId,
+        payload: {
+          contractId,
+          contractNumber: contract.contractNumber,
+          siteId,
+          endDate: contract.endDate.toISOString().slice(0, 10),
+        },
+      });
       return updated;
     });
   }

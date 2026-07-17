@@ -58,4 +58,29 @@ describe('InvoiceStateMachine', () => {
       expect.objectContaining({ code: 'INVOICE_INVALID_STATUS_TRANSITION' }),
     );
   });
+
+  // Faz 8 (plan Bolum 7.1, karar #4): assertSystemOverdueTransition YALNIZ
+  // sistem-tetiklemeli InvoiceOverdueScanJob'un kullandigi ayri metot -
+  // assertTransition'in "OVERDUE'ya manuel gecis yasak" davranisi (yukaridaki
+  // 25 hucre) bu metottan tamamen bagimsiz kalmaya devam eder.
+  describe('assertSystemOverdueTransition', () => {
+    it('ISSUED -> OVERDUE (sistem yolu): izinli', () => {
+      expect(() => machine.assertSystemOverdueTransition('ISSUED')).not.toThrow();
+    });
+
+    it.each<InvoiceStatus>(['DRAFT', 'PAID', 'OVERDUE', 'CANCELLED'])(
+      '%s -> OVERDUE (sistem yolu): 409 INVOICE_INVALID_STATUS_TRANSITION',
+      (from) => {
+        expect(() => machine.assertSystemOverdueTransition(from)).toThrow(
+          expect.objectContaining({ code: 'INVOICE_INVALID_STATUS_TRANSITION' }),
+        );
+      },
+    );
+
+    it('assertTransition hala ISSUED -> OVERDUE manuel gecisini reddeder (regresyon)', () => {
+      expect(() => machine.assertTransition('ISSUED', 'OVERDUE')).toThrow(
+        expect.objectContaining({ code: 'INVOICE_INVALID_STATUS_TRANSITION' }),
+      );
+    });
+  });
 });

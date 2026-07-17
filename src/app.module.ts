@@ -1,12 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import {
   appConfig,
   authConfig,
+  backgroundJobsConfig,
+  contractsConfig,
   corsConfig,
   databaseConfig,
   loggingConfig,
+  outboxRelayConfig,
   storageConfig,
   ticketsConfig,
 } from './config/configuration';
@@ -25,6 +29,7 @@ import { AssignmentsModule } from './modules/assignments/assignments.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -39,8 +44,14 @@ import { BillingModule } from './modules/billing/billing.module';
         authConfig,
         ticketsConfig,
         storageConfig,
+        outboxRelayConfig,
+        contractsConfig,
+        backgroundJobsConfig,
       ],
     }),
+    // Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 3.2/10.1):
+    // global - SchedulerRegistry butun modullerde DI ile erisilebilir.
+    ScheduleModule.forRoot(),
     LoggerModule,
     PrismaModule,
     HealthModule,
@@ -54,6 +65,7 @@ import { BillingModule } from './modules/billing/billing.module';
     AttachmentsModule,
     ContractsModule,
     BillingModule,
+    NotificationsModule,
   ],
   providers: [
     {

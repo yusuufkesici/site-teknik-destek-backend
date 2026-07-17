@@ -23,6 +23,7 @@ export interface ContractRow {
   updatedAt: Date;
   terminatedAt: Date | null;
   terminationReason: string | null;
+  expiryNotifiedAt: Date | null;
 }
 
 export interface CreateContractInput {
@@ -52,6 +53,11 @@ export interface UpdateContractInput {
   status?: ContractStatus;
   terminatedAt?: Date;
   terminationReason?: string;
+  // Faz 8: yalniz ContractService.update'in expiryNotifiedAt sifirlama
+  // dokunusu tarafindan kullanilir (endDate degisimi / ACTIVE'e yeniden
+  // giris) - "undefined" alan degismez, "null" acikca sifirlar anlamina
+  // gelir (diger opsiyonel alanlarla ayni Prisma partial-update semantigi).
+  expiryNotifiedAt?: Date | null;
 }
 
 export interface ContractListFilter {
@@ -59,6 +65,13 @@ export interface ContractListFilter {
   status?: ContractStatus;
   cursor: CursorPayload | null;
   limit: number;
+}
+
+export interface ExpiringContractCandidate {
+  id: string;
+  siteId: string;
+  contractNumber: string;
+  endDate: Date;
 }
 
 // Onaylanan Faz 7 plani Bolum 13: bu repository ASLA export edilmez;
@@ -121,7 +134,8 @@ export class ContractRepository {
         created_at AS "createdAt",
         updated_at AS "updatedAt",
         terminated_at AS "terminatedAt",
-        termination_reason AS "terminationReason"
+        termination_reason AS "terminationReason",
+        expiry_notified_at AS "expiryNotifiedAt"
       FROM contracts
       WHERE id = ${id}
       FOR UPDATE
@@ -172,7 +186,40 @@ export class ContractRepository {
         status: data.status,
         terminatedAt: data.terminatedAt,
         terminationReason: data.terminationReason,
+        expiryNotifiedAt: data.expiryNotifiedAt,
       },
+    });
+  }
+
+  // Faz 8 (onaylanan docs/phase-8-plan.md Bolum 7.2/9): ContractExpiringScanJob'un
+  // sistem-only, siteler-arasi aday sorgusu - implementation-overrides.md
+  // #3 geregi acikca adlandirilmis, kilitsiz salt-okunur. Asil mutasyon
+  // (ContractService.markExpiringNotifiedBySystem) her aday icin AYRI bir
+  // findByIdForUpdate row-lock kullanir. Mevcut @@index([status, endDate])
+  // kullanilir.
+  async findExpiringSoonAcrossSites(
+    client: PrismaClientLike,
+    params: { today: Date; leadDays: number; limit: number },
+  ): Promise<ExpiringContractCandidate[]> {
+    return client.$queryRaw<ExpiringContractCandidate[]>`
+      SELECT id, site_id AS "siteId", contract_number AS "contractNumber", end_date AS "endDate"
+      FROM contracts
+      WHERE status = 'ACTIVE'
+        AND end_date >= ${params.today}::date
+        AND end_date <= ${params.today}::date + (${params.leadDays} || ' days')::interval
+        AND expiry_notified_at IS NULL
+      ORDER BY end_date ASC
+      LIMIT ${params.limit}
+    `;
+  }
+
+  // Sistem-only, dar yazma yolu - InvoiceRepository.updateStatus emsali.
+  // Genel update()'i degil, yalniz bu tek alani hedefleyen ayri bir metot
+  // kullanmak niyeti acik tutar (ContractExpiringScanJob DISINDA cagrilmaz).
+  async markExpiringNotified(client: PrismaClientLike, id: string): Promise<ContractRow> {
+    return client.contract.update({
+      where: { id },
+      data: { expiryNotifiedAt: new Date() },
     });
   }
 

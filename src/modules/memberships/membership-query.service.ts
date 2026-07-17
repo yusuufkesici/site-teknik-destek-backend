@@ -67,4 +67,13 @@ export class MembershipQueryService {
     const now = opts?.now ?? new Date();
     return this.siteMembershipRepo.findManagedSiteIds(client, userId, now);
   }
+
+  // Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 3.2/6.4): bildirim
+  // alicisi cozumlemesi icin - yalniz ilgili site'nin aktif MANAGER
+  // uyeliklerini doner.
+  async listActiveManagerUserIds(siteId: string, opts?: MembershipQueryOptions): Promise<string[]> {
+    const client = opts?.client ?? this.prisma;
+    const now = opts?.now ?? new Date();
+    return this.siteMembershipRepo.findActiveManagerUserIdsForSite(client, siteId, now);
+  }
 }

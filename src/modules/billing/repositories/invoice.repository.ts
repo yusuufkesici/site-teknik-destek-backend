@@ -52,6 +52,14 @@ export interface InvoiceListFilter {
   limit: number;
 }
 
+export interface OverdueInvoiceCandidate {
+  id: string;
+  contractId: string;
+  siteId: string;
+  invoiceNumber: string;
+  dueDate: Date;
+}
+
 // Onaylanan Faz 7 plani Bolum 13: bu repository ASLA export edilmez.
 // ContractInvoice'un kendi siteId'si YOKTUR - site kapsami her sorguda
 // contract.siteId uzerinden turetilir (implementation-overrides.md #3).
@@ -150,6 +158,29 @@ export class InvoiceRepository {
         referenceNumber: input.referenceNumber,
       },
     });
+  }
+
+  // Faz 8 (onaylanan docs/phase-8-plan.md Bolum 7.1): sistem/cron-only,
+  // siteler-arasi aday sorgusu - InvoiceOverdueScanJob DISINDA hicbir
+  // yerden cagirilmaz (implementation-overrides.md #3: siteler arasi
+  // sorgular yalniz acikca adlandirilmis ayri metotlarda olur). Kilitsiz
+  // salt-okunur SELECT - asil mutasyon markOverdueBySystem() icinde
+  // findByIdForUpdate ile ayrica kilitlenir, bu yuzden burada FOR UPDATE
+  // YOKTUR. Mevcut @@index([status, dueDate]) kullanilir, yeni index
+  // gerekmez. siteId invoice'ta YOKTUR - contract join'inden turer.
+  async findOverdueCandidatesAcrossSites(
+    client: PrismaClientLike,
+    params: { today: Date; limit: number },
+  ): Promise<OverdueInvoiceCandidate[]> {
+    return client.$queryRaw<OverdueInvoiceCandidate[]>`
+      SELECT ci.id, ci.contract_id AS "contractId", c.site_id AS "siteId",
+             ci.invoice_number AS "invoiceNumber", ci.due_date AS "dueDate"
+      FROM contract_invoices ci
+      JOIN contracts c ON c.id = ci.contract_id
+      WHERE ci.status = 'ISSUED' AND ci.due_date < ${params.today}::date
+      ORDER BY ci.due_date ASC
+      LIMIT ${params.limit}
+    `;
   }
 
   // Site kapsami contract iliskisi uzerinden uygulanir; siteId'siz calisan
