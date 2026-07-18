@@ -20,6 +20,7 @@
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
     "test": "jest --config jest.config.ts",
     "test:integration": "jest --config test/integration/jest-integration.json --runInBand",
     "test:e2e": "jest --config test/e2e/jest-e2e.json --runInBand"
