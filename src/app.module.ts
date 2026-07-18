@@ -9,6 +9,7 @@ import {
   contractsConfig,
   corsConfig,
   databaseConfig,
+  devSmsInboxConfig,
   loggingConfig,
   outboxRelayConfig,
   storageConfig,
@@ -29,6 +30,8 @@ import { AssignmentsModule } from './modules/assignments/assignments.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { BillingModule } from './modules/billing/billing.module';
+import { isDevToolsEnabled } from './modules/dev-tools/dev-tools.condition';
+import { DevToolsModule } from './modules/dev-tools/dev-tools.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
@@ -47,6 +50,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
         outboxRelayConfig,
         contractsConfig,
         backgroundJobsConfig,
+        devSmsInboxConfig,
       ],
     }),
     // Faz 8 Dilim 1 (onaylanan docs/phase-8-plan.md Bolum 3.2/10.1):
@@ -66,6 +70,12 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     ContractsModule,
     BillingModule,
     NotificationsModule,
+    // Faz 9 karar #2: dev-only OTP inbox route'u YALNIZ
+    // NODE_ENV=development VE DEV_SMS_INBOX_ENABLED=true iken mount edilir
+    // (cift kosul, isDevToolsEnabled). process.env burada yalniz modul
+    // kompozisyonu icin okunur; ayni kosul calisma zamaninda
+    // devSmsInboxConfig.enabled uzerinden yeniden dogrulanir.
+    ...(isDevToolsEnabled(process.env) ? [DevToolsModule] : []),
   ],
   providers: [
     {

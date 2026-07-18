@@ -71,6 +71,15 @@ const rawEnvSchema = z.object({
   // z.coerce.boolean() kullanilmaz, alan seviyesinde varsayilan yok,
   // production'da acikca verilmesi superRefine'da zorunlu kilinir.
   BACKGROUND_JOBS_ENABLED: z.enum(['true', 'false']).optional(),
+
+  // Faz 9 karar #2 (onaylanan docs/phase-9-plan.md): dev-only SMS inbox'in
+  // acik anahtari. OUTBOX_RELAY_ENABLED ile ayni gerekceyle
+  // z.coerce.boolean() KULLANILMAZ (Boolean('false') === true tuzagi);
+  // ham 'true'|'false'|undefined birakilir. Gercek varsayilan (false)
+  // configuration.ts'teki devSmsInboxConfig'te uygulanir ve deger YALNIZ
+  // NODE_ENV=development iken etkilidir - production/test'te 'true'
+  // verilse bile inbox/route devre disi kalir (cift kosul).
+  DEV_SMS_INBOX_ENABLED: z.enum(['true', 'false']).optional(),
 });
 
 export const envSchema = rawEnvSchema.superRefine((env, ctx) => {

@@ -164,3 +164,43 @@ describe('validateEnv - CONTRACT_EXPIRY_LEAD_DAYS', () => {
     );
   });
 });
+
+// Faz 9 karar #2: DEV_SMS_INBOX_ENABLED yalniz 'true'|'false' string'i
+// kabul eder; varsayilan uygulanmaz (undefined kalir - gercek varsayilan
+// false, configuration.ts'teki devSmsInboxConfig'tedir). Production'da
+// zorunlu DEGILDIR cunku verilmediginde guvenli taraf (kapali) gecerlidir.
+describe('validateEnv - DEV_SMS_INBOX_ENABLED', () => {
+  it('verilmemis: dogrulama basarili olur ve deger undefined kalir', () => {
+    const result = validateEnv(baseEnv());
+    expect(result.DEV_SMS_INBOX_ENABLED).toBeUndefined();
+  });
+
+  it("'true' ve 'false' string'leri kabul edilir", () => {
+    expect(validateEnv(baseEnv({ DEV_SMS_INBOX_ENABLED: 'true' })).DEV_SMS_INBOX_ENABLED).toBe(
+      'true',
+    );
+    expect(validateEnv(baseEnv({ DEV_SMS_INBOX_ENABLED: 'false' })).DEV_SMS_INBOX_ENABLED).toBe(
+      'false',
+    );
+  });
+
+  it('gecersiz deger reddedilir', () => {
+    expect(() => validateEnv(baseEnv({ DEV_SMS_INBOX_ENABLED: '1' }))).toThrow(
+      /DEV_SMS_INBOX_ENABLED/,
+    );
+  });
+
+  it('production ortaminda verilmemis olmasi hata degildir (guvenli varsayilan: kapali)', () => {
+    const env = baseEnv({
+      NODE_ENV: 'production',
+      SMS_PROVIDER: 'external',
+      SMS_API_URL: 'https://sms.example',
+      SMS_API_KEY: 'k',
+      OUTBOX_RELAY_ENABLED: 'false',
+      BACKGROUND_JOBS_ENABLED: 'false',
+    });
+
+    const result = validateEnv(env);
+    expect(result.DEV_SMS_INBOX_ENABLED).toBeUndefined();
+  });
+});

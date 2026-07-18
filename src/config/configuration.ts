@@ -110,6 +110,18 @@ export const backgroundJobsConfig = registerAs('backgroundJobs', () => {
   };
 });
 
+// Faz 9 karar #2: dev-only SMS inbox CIFT kosula baglidir - YALNIZ
+// NODE_ENV=development VE DEV_SMS_INBOX_ENABLED=true iken acilir.
+// Varsayilan false'tur; production/test ortaminda deger 'true' olsa bile
+// kapali kalir. Ayni cift kosul route mount'u icin app.module.ts'te
+// (isDevToolsEnabled) ve provider seciminde sms.module.ts'te kullanilir.
+export const devSmsInboxConfig = registerAs('devSmsInbox', () => {
+  const env = getValidatedEnv();
+  return {
+    enabled: env.NODE_ENV === 'development' && env.DEV_SMS_INBOX_ENABLED === 'true',
+  };
+});
+
 export const storageConfig = registerAs('storage', () => {
   const env = getValidatedEnv();
   return {
