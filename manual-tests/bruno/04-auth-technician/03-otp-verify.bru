@@ -1,0 +1,28 @@
+meta {
+  name: 03 TECHNICIAN OTP verify
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/otp/verify
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "phoneNumber": "{{techPhone}}",
+    "code": "{{techOtp}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.accessToken: isDefined
+  res.body.user.role: eq TECHNICIAN
+}
+
+script:post-response {
+  bru.setVar("techToken", res.body.accessToken);
+}

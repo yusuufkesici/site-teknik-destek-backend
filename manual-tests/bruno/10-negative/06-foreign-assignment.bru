@@ -1,0 +1,28 @@
+meta {
+  name: 06 Baska teknisyenin assignment'i - uniform 404
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/assignments/99999999-9999-4999-8999-999999999999/accept
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{techToken}}
+}
+
+assert {
+  res.status: eq 404
+  res.body.error.code: eq ASSIGNMENT_NOT_FOUND
+}
+
+docs {
+  Seed'de tek teknisyen bulundugu icin "baska teknisyenin assignment'i"
+  fiilen olusturulamaz. Kod yolu geregi sahiplik uyusmazligi
+  (assignment.technicianId !== actor.id) ile hic var olmayan assignment
+  AYNI uniform 404 ASSIGNMENT_NOT_FOUND yanitini uretir (varlik
+  sizdirilmez); senaryo bu ortak yolu var olmayan bir UUID ile dogrular.
+}

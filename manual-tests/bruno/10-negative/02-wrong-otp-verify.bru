@@ -1,0 +1,30 @@
+meta {
+  name: 02 Yanlis OTP verify - 401 AUTH_INVALID_OTP
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/otp/verify
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "phoneNumber": "{{marinaResidentPhone}}",
+    "code": "000000"
+  }
+}
+
+assert {
+  res.status: eq 401
+  res.body.success: eq false
+  res.body.error.code: eq AUTH_INVALID_OTP
+}
+
+docs {
+  Sabit "000000" kodu ~1e-6 olasilikla gercek OTP'ye denk gelebilir; boyle
+  bir durumda senaryo bir kez daha kosulur. Hatali deneme transaction'i
+  rollback edilmez: attemptCount artisi commit edilir (override #6).
+}

@@ -1,0 +1,52 @@
+meta {
+  name: 02 Sozlesme olusturma (gelecek yil, DRAFT)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/contracts
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "siteId": "{{panoramaSiteId}}",
+    "startDate": "{{nextYearStart}}",
+    "endDate": "{{nextYearEnd}}",
+    "monthlyFee": "16000.00",
+    "billingDay": 5,
+    "serviceScope": "Elektrik, sihhi tesisat ve ortak alan bakim hizmetleri.",
+    "standardResponseTargetHours": 24,
+    "emergencyCoverage": true
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.status: eq DRAFT
+}
+
+script:pre-request {
+  const nextYear = new Date().getUTCFullYear() + 1;
+  bru.setVar("nextYearStart", `${nextYear}-01-01`);
+  bru.setVar("nextYearEnd", `${nextYear}-12-31`);
+}
+
+script:post-response {
+  bru.setVar("draftContractId", res.body.id);
+}
+
+docs {
+  Seed'in ACTIVE sozlesmesi icinde bulunulan yili kapsadigi icin pozitif
+  olusturma GELECEK yila yapilir (ACTIVE/SUSPENDED cakisma on-kontrolu
+  yalniz o durumlar icindir; DRAFT-DRAFT cakismasi serbesttir, bu nedenle
+  adim tekrar calistirilabilir). Ayni donem icin ikinci ACTIVE sozlesme
+  denemesi negatif senaryodadir.
+}

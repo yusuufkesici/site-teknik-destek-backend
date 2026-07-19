@@ -1,0 +1,6 @@
+{
+  "version": "1",
+  "name": "site-teknik-destek-manual-acceptance",
+  "type": "collection",
+  "ignore": ["node_modules", ".git"]
+}

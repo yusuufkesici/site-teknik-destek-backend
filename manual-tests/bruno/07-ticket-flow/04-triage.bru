@@ -1,0 +1,32 @@
+meta {
+  name: 04 Operations triage (OPEN -> TRIAGED)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/tickets/{{ticketId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "toStatus": "TRIAGED"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.status: eq TRIAGED
+}
+
+docs {
+  POST /tickets/:id/status yalniz OPERATIONS'a aciktir ve dogrudan gecis
+  olarak yalniz TRIAGED ve CLOSED hedeflerini kabul eder; ara durumlar
+  assignment akisiyla ilerler.
+}

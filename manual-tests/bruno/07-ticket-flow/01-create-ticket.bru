@@ -1,0 +1,40 @@
+meta {
+  name: 01 Resident ticket olusturma
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/tickets
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{residentToken}}
+}
+
+body:json {
+  {
+    "facilityId": "{{panoramaUnitA1Id}}",
+    "title": "Mutfak lavabosunda su kacagi",
+    "description": "Mutfak lavabosunun altindaki sifon surekli su sizdiriyor, dolabin ici islandi.",
+    "category": "PLUMBING",
+    "urgency": "STANDARD"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.status: eq OPEN
+}
+
+script:post-response {
+  bru.setVar("ticketId", res.body.id);
+}
+
+docs {
+  Yeni ticket olusturma aktif sozlesme gerektirir; seed'deki Panorama
+  sozlesmesi (SEED-PNR-ACTIVE) icinde bulunulan yili kapsar.
+}

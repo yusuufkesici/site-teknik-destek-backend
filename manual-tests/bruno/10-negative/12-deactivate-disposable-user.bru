@@ -1,0 +1,31 @@
+meta {
+  name: 12 Inaktif kullanici hazirlik - global deactivate (204)
+  type: http
+  seq: 12
+}
+
+post {
+  url: {{baseUrl}}/users/{{disposableUserId}}/deactivate
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "reason": "Manuel kabul inaktif-kullanici senaryosu."
+  }
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Seed'deki gecici sakin (+9055500000 06) bu senaryoda harcanir. Seed
+  yeniden kosuldugunda kullanici, uyeligi ve unit eslesmesi otomatik
+  yeniden aktiflestirilir (idempotent geri donus).
+}

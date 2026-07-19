@@ -1,0 +1,21 @@
+meta {
+  name: 12 Attachment listeleme (RESIDENT)
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/tickets/{{ticketId}}/attachments
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{residentToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.items: isDefined
+  res.body.items.length: gte 1
+}

@@ -1,0 +1,29 @@
+meta {
+  name: 15 Refresh token reuse - 401 AUTH_INVALID_REFRESH
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/auth/token/refresh
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{residentRefreshOld}}"
+  }
+}
+
+assert {
+  res.status: eq 401
+  res.body.error.code: eq AUTH_INVALID_REFRESH
+}
+
+docs {
+  Pozitif zincirdeki rotasyonda kullanilmis sayilan eski refresh token
+  yeniden sunulur. Reuse detection kullanicinin TUM aktif refresh
+  session'larini revoke eder ve audit kaydini ayni transaction'da yazar
+  (override #8); client'a uniform 401 AUTH_INVALID_REFRESH doner.
+}

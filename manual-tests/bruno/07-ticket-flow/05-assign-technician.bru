@@ -1,0 +1,32 @@
+meta {
+  name: 05 Teknisyen atama (TRIAGED -> ASSIGNED)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/tickets/{{ticketId}}/assignments
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "technicianId": "{{technicianUserId}}"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.assignmentStatus: eq PENDING
+  res.body.isCurrent: eq true
+}
+
+script:post-response {
+  bru.setVar("assignmentId", res.body.id);
+}

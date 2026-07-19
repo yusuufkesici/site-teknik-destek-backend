@@ -1,0 +1,31 @@
+meta {
+  name: 05 Gecersiz ticket gecisi - CLOSED -> TRIAGED (409)
+  type: http
+  seq: 5
+}
+
+post {
+  url: {{baseUrl}}/tickets/{{ticketId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "toStatus": "TRIAGED"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.error.code: eq TICKET_INVALID_STATUS_TRANSITION
+}
+
+docs {
+  Pozitif zincirde CLOSED yapilan ticket uzerinde tanimsiz bir gecis
+  denenir. Ticket degismez, status history kaydi yazilmaz.
+}

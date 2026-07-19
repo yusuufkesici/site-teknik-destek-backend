@@ -1,0 +1,26 @@
+meta {
+  name: 02 Dev inbox OPERATIONS OTP
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/dev/sms/{{opsPhone}}/last-otp
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.code: isDefined
+}
+
+script:post-response {
+  bru.setVar("opsOtp", res.body.code);
+}
+
+docs {
+  Yalniz NODE_ENV=development VE DEV_SMS_INBOX_ENABLED=true iken calisir;
+  aksi halde 404 doner. OTP yalniz calisma ani degiskenine (bru.setVar)
+  yazilir, environment dosyasina KALICI yazilmaz.
+}

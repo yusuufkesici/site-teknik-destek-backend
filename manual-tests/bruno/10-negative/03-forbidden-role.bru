@@ -1,0 +1,34 @@
+meta {
+  name: 03 Yetkisiz rol - resident site olusturamaz (403)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/facilities/sites
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{residentToken}}
+}
+
+body:json {
+  {
+    "name": "Yetkisiz Site Denemesi",
+    "code": "YSD"
+  }
+}
+
+assert {
+  res.status: eq 403
+  res.body.error.code: eq FORBIDDEN
+}
+
+docs {
+  POST /facilities/sites yalniz OPERATIONS rolune aciktir (override #10:
+  PLATFORM_ADMIN yoktur). RolesGuard 403 FORBIDDEN dondurur, kayit
+  olusmaz. Bu adim pozitif zincirdeki resident token'ini kullanir; logout
+  sonrasinda kosulacaksa resident'in yeniden giris yapmasi gerekir.
+}

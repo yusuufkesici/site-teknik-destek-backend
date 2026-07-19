@@ -1,0 +1,42 @@
+meta {
+  name: 08 Cakisan sozlesme - 409 CONTRACT_OVERLAP
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/contracts
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "siteId": "{{panoramaSiteId}}",
+    "startDate": "{{overlapStart}}",
+    "endDate": "{{overlapEnd}}",
+    "monthlyFee": "14000.00",
+    "billingDay": 10
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.error.code: eq CONTRACT_OVERLAP
+}
+
+script:pre-request {
+  const y = new Date().getUTCFullYear();
+  bru.setVar("overlapStart", `${y}-03-01`);
+  bru.setVar("overlapEnd", `${y}-06-30`);
+}
+
+docs {
+  Tarih araligi, seed'in ACTIVE Panorama sozlesmesinin (icinde bulunulan
+  yil) icine dusecek sekilde dinamik kurulur; ACTIVE/SUSPENDED cakisma
+  on-kontrolu istegi reddeder, kayit olusmaz. Senaryo idempotenttir.
+}

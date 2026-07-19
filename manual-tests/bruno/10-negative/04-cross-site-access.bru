@@ -1,0 +1,25 @@
+meta {
+  name: 04 Baska siteye erisim - uniform 404 SITE_NOT_FOUND
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/facilities/sites/{{marinaSiteId}}/tree
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{managerToken}}
+}
+
+assert {
+  res.status: eq 404
+  res.body.error.code: eq SITE_NOT_FOUND
+}
+
+docs {
+  Panorama yoneticisi Marina sitesine erisemez. SiteScopeGuard varlik
+  sizdirmamak icin 403 degil uniform 404 SITE_NOT_FOUND dondurur.
+}

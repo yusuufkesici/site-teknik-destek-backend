@@ -1,0 +1,21 @@
+meta {
+  name: 01 RESIDENT OTP request
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/otp/request
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "phoneNumber": "{{residentPhone}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+}

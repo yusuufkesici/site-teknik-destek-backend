@@ -1,0 +1,20 @@
+meta {
+  name: 02 Dev inbox RESIDENT OTP
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/dev/sms/{{residentPhone}}/last-otp
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.code: isDefined
+}
+
+script:post-response {
+  bru.setVar("residentOtp", res.body.code);
+}

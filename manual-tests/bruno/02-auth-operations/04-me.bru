@@ -1,0 +1,22 @@
+meta {
+  name: 04 GET /auth/me (OPERATIONS)
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{baseUrl}}/auth/me
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.role: eq OPERATIONS
+  res.body.id: isDefined
+  res.body.memberships: isDefined
+}

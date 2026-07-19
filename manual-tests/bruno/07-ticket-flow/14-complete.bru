@@ -1,0 +1,29 @@
+meta {
+  name: 14 COMPLETE eventi (COMPLETED)
+  type: http
+  seq: 14
+}
+
+post {
+  url: {{baseUrl}}/assignments/{{assignmentId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{techToken}}
+}
+
+body:json {
+  {
+    "event": "COMPLETE",
+    "note": "Sifon contasi degistirildi, kacak giderildi."
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.assignmentStatus: eq COMPLETED
+  res.body.completedAt: isDefined
+  res.body.resolutionNote: isDefined
+}

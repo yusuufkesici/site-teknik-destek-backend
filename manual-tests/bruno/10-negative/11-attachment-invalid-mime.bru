@@ -1,0 +1,33 @@
+meta {
+  name: 11 Gecersiz attachment magic-byte - 415
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/tickets/{{emergencyTicketId}}/attachments
+  body: multipartForm
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:multipart-form {
+  attachmentType: OTHER
+  file: @file(fixtures/fake-image.jpg)
+}
+
+assert {
+  res.status: eq 415
+  res.body.error.code: eq ATTACHMENT_UNSUPPORTED_TYPE
+}
+
+docs {
+  fake-image.jpg uzantisi .jpg olan duz metindir: beyan edilen content
+  type image/jpeg olsa da magic-byte dogrulamasi JPEG/PNG/WEBP imzasi
+  bulamaz ve 415 doner. MIME kontrolu yetki kontrolunden ONCE
+  calistigindan istek OPERATIONS token'iyla da ayni sonucu verir; gecici
+  dosya temizlenir, DB kaydi olusmaz.
+}

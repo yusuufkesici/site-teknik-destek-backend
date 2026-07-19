@@ -1,0 +1,30 @@
+meta {
+  name: 03 OPERATIONS OTP verify
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/otp/verify
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "phoneNumber": "{{opsPhone}}",
+    "code": "{{opsOtp}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.accessToken: isDefined
+  res.body.refreshToken: isDefined
+  res.body.user.role: eq OPERATIONS
+}
+
+script:post-response {
+  bru.setVar("opsToken", res.body.accessToken);
+  bru.setVar("opsRefresh", res.body.refreshToken);
+}

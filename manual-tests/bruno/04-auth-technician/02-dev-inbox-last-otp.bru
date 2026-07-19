@@ -1,0 +1,20 @@
+meta {
+  name: 02 Dev inbox TECHNICIAN OTP
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/dev/sms/{{techPhone}}/last-otp
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 200
+  res.body.code: isDefined
+}
+
+script:post-response {
+  bru.setVar("techOtp", res.body.code);
+}

@@ -1,0 +1,39 @@
+meta {
+  name: 02 Refresh rotation (RESIDENT)
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{baseUrl}}/auth/token/refresh
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "refreshToken": "{{residentRefresh}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.accessToken: isDefined
+  res.body.refreshToken: isDefined
+}
+
+script:pre-request {
+  bru.setVar("residentRefreshOld", bru.getVar("residentRefresh"));
+}
+
+script:post-response {
+  bru.setVar("residentToken", res.body.accessToken);
+  bru.setVar("residentRefresh", res.body.refreshToken);
+}
+
+docs {
+  Eski refresh token rotasyonla kullanilmis sayilir ve calisma ani
+  degiskeni residentRefreshOld'da tutulur; negatif refresh-reuse senaryosu
+  bu degeri yeniden sunarak AUTH_INVALID_REFRESH bekler. Token'lar hicbir
+  zaman environment dosyasina kalici yazilmaz.
+}
