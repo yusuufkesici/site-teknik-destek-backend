@@ -23,10 +23,13 @@ export const appConfig = registerAs('app', () => {
 
 export const corsConfig = registerAs('cors', () => {
   const env = getValidatedEnv();
+  // Girdi icerigi validation.schema.ts'te dogrulanir (yalniz http/https
+  // origin bicimi, bos girdi ve '*' reddi); burada yalniz normalizasyon
+  // yapilir: trim + duplicate temizligi (Faz 9 Slice 4).
   return {
-    allowedOrigins: env.CORS_ALLOWED_ORIGINS.split(',')
-      .map((origin) => origin.trim())
-      .filter((origin) => origin.length > 0),
+    allowedOrigins: [
+      ...new Set(env.CORS_ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())),
+    ],
   };
 });
 

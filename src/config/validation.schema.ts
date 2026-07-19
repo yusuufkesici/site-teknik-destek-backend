@@ -82,6 +82,21 @@ const rawEnvSchema = z.object({
   DEV_SMS_INBOX_ENABLED: z.enum(['true', 'false']).optional(),
 });
 
+// Faz 9 Slice 4: yalniz origin bicimi kabul edilir (scheme + host + opsiyonel
+// port). new URL() parse edebilmeli, sema http/https olmali ve girilen deger
+// URL'nin origin'iyle birebir ayni olmali - boylece path/query/fragment,
+// trailing slash, kullanici bilgisi (user:pass@) ve buyuk harfli sema iceren
+// girdiler tek kuralla reddedilir.
+function isValidHttpOrigin(entry: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(entry);
+  } catch {
+    return false;
+  }
+  return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.origin === entry;
+}
+
 export const envSchema = rawEnvSchema.superRefine((env, ctx) => {
   const jwtSecrets = env.JWT_ACCESS_SECRET.split(',').map((secret) => secret.trim());
   if (jwtSecrets.length === 0 || jwtSecrets.some((secret) => secret.length < 32)) {
@@ -98,6 +113,63 @@ export const envSchema = rawEnvSchema.superRefine((env, ctx) => {
       path: ['SMS_PROVIDER'],
       message: 'Production ortaminda SMS_PROVIDER=mock kullanilamaz.',
     });
+  }
+
+  // Faz 9 Slice 4 fail-fast: ExternalSmsProvider HENUZ IMPLEMENTE EDILMEDI.
+  // 'external' secimi bu yuzden hicbir ortamda kabul edilmez; gercek provider
+  // eklenene kadar tam production boot bilincli olarak kapalidir (production
+  // mock'u da reddettigi icin). SmsModule'deki factory hatasi ikinci savunma
+  // hatti olarak kalir; ana fail-fast katmani burasidir.
+  if (env.SMS_PROVIDER === 'external') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['SMS_PROVIDER'],
+      message:
+        'SMS_PROVIDER=external henuz desteklenmiyor: ExternalSmsProvider implemente edilmedi (gelecek faz). development/test icin SMS_PROVIDER=mock kullanin.',
+    });
+  }
+
+  // Faz 9 Slice 4 fail-fast: S3StorageProvider HENUZ IMPLEMENTE EDILMEDI.
+  // StorageModule'deki factory hatasi ikinci savunma hatti olarak kalir.
+  if (env.STORAGE_PROVIDER === 's3') {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['STORAGE_PROVIDER'],
+      message:
+        'STORAGE_PROVIDER=s3 henuz desteklenmiyor: S3StorageProvider implemente edilmedi (gelecek faz). STORAGE_PROVIDER=local kullanin.',
+    });
+  }
+
+  // Faz 9 Slice 4 CORS sertlestirmesi: virgulle ayrilmis her girdi trim
+  // sonrasi bos olmayan, http/https semali GERCEK bir origin olmalidir.
+  // '*' hicbir ortamda kabul edilmez: CORS her zaman credentials:true ile
+  // acildigindan (main.ts) wildcard + credentials kombinasyonu zaten gecersiz
+  // olurdu; production'da ayrica acik guvenlik riskidir.
+  for (const entry of env.CORS_ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())) {
+    if (entry.length === 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CORS_ALLOWED_ORIGINS'],
+        message: 'CORS_ALLOWED_ORIGINS bos veya yalniz whitespace origin girdisi iceremez.',
+      });
+      continue;
+    }
+    if (entry === '*') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CORS_ALLOWED_ORIGINS'],
+        message:
+          "CORS_ALLOWED_ORIGINS '*' (wildcard) kabul etmez: credentials:true ile birlikte kullanilamaz; origin'leri acikca listeleyin.",
+      });
+      continue;
+    }
+    if (!isValidHttpOrigin(entry)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CORS_ALLOWED_ORIGINS'],
+        message: `CORS_ALLOWED_ORIGINS gecersiz origin iceriyor: '${entry}'. Yalniz 'http(s)://host[:port]' bicimi kabul edilir (path/query/fragment olamaz).`,
+      });
+    }
   }
 
   // Faz 8 Dilim 1: production'da varsayilan deger KULLANILAMAZ - ilk

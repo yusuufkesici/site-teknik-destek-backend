@@ -164,8 +164,8 @@ jobs:
             -e EMERGENCY_SLA_HOURS=4 \
             -e OUTBOX_RELAY_ENABLED=false \
             -e BACKGROUND_JOBS_ENABLED=false \
-            app-runtime
-          code=$?
+            app-runtime 2>&1 | tee failfast.log
+          code=${PIPESTATUS[0]}
           set -e
           if [ "$code" -eq 0 ]; then
             echo "Beklenen: production + mock SMS boot'u reddedilmeliydi (cikis kodu 0 geldi)" >&2
@@ -175,7 +175,22 @@ jobs:
             echo "Beklenen: fail-fast; uygulama calismaya devam etti (timeout)" >&2
             exit 1
           fi
-          echo "Fail-fast dogrulandi (cikis kodu: $code)"
+          # Faz 9 Slice 4: basarisizligin SEBEBI de dogrulanir - beklenen,
+          # config validation'in mock-in-production mesajidir. MODULE_NOT_FOUND
+          # gibi bagimlilik/entrypoint hatalari basari SAYILMAZ.
+          if grep -q "MODULE_NOT_FOUND\|Cannot find module" failfast.log; then
+            echo "Fail-fast sebebi bagimlilik hatasi; validation hatasi bekleniyordu" >&2
+            exit 1
+          fi
+          if ! grep -q "Environment dogrulama hatasi" failfast.log; then
+            echo "Beklenen 'Environment dogrulama hatasi' mesaji logda yok" >&2
+            exit 1
+          fi
+          if ! grep -q "SMS_PROVIDER" failfast.log; then
+            echo "Beklenen SMS_PROVIDER validation mesaji logda yok" >&2
+            exit 1
+          fi
+          echo "Fail-fast dogrulandi (cikis kodu: $code, sebep: SMS provider validation)"
 
       - name: Temizlik
         if: always()
