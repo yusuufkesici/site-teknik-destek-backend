@@ -4,6 +4,21 @@ B2B SaaS · Modüler Monolit · NestJS + PostgreSQL + Prisma
 
 ---
 
+## Belge Statüsü
+
+Bu belge projenin **başlangıç mimari tasarımıdır** ve tarihsel referans olarak
+korunmaktadır. Faz 1–8 uygulaması sırasında bazı kararlar değişmiştir.
+
+- Güncel kaynak otoritesi sırası: kullanıcının mevcut görev mesajı →
+  `docs/implementation-overrides.md` → onaylanmış faz planı → bu belge →
+  mevcut kaynak kod (`CLAUDE.md` ile aynı sıra).
+- Uygulama ile bu belge arasındaki bilinen farkların bağlayıcı listesi:
+  **Bölüm 17: Uygulama Sonrası Mimari Revizyon (Faz 1–8)**.
+- Farkın geçerli olduğu bölümlerde kısa bir "Uygulama notu (Faz 9)" kutusu
+  bulunur; kutu, tarihsel metni silmeden güncel gerçekliği işaret eder.
+
+---
+
 ## Bölüm 1: Mimari Karar Özeti
 
 ### Neden NestJS?
@@ -678,6 +693,12 @@ model OutboxEvent {
 - `Ticket.code` + `Ticket.version`: kullanıcıya okunur numara ve optimistic locking; ayrı model eklenmedi.
 - Ek model **eklenmemiştir**; 16 model + enum'lar tüm iş kurallarını karşılar.
 
+> **Uygulama notu (Faz 9):** Faz 7–8 uygulaması bu şemayı genişletti:
+> `Contract.expiryNotifiedAt` alanı, `OutboxEvent.failedAt` alanı ve yeni
+> `NotificationDelivery` modeli (`notification_deliveries`) eklendi; güncel
+> model sayısı 17'dir. Bağlayıcı şema `prisma/schema.prisma`'dadır.
+> Bkz. Bölüm 17.
+
 ---
 
 ## Bölüm 6: PostgreSQL Özel Migration'lar
@@ -1134,6 +1155,13 @@ Genel kurallar:
 - Ortak hata kodları: `401 AUTH_REQUIRED`, `403 *_FORBIDDEN`, `404 *_NOT_FOUND`, `409 *_CONFLICT`, `422 VALIDATION_ERROR`, `429 RATE_LIMITED`.
 - Erişimi olmayan kaynaklarda 403 yerine **404** dönerek varlık sızdırılmaz (IDOR yanıt politikası).
 
+> **Uygulama notu (Faz 9):** Uygulamada yalnız **hata** yanıtları
+> `{ success: false, error: { code, message, requestId, timestamp } }`
+> zarfındadır (`src/common/filters/global-exception.filter.ts`); **başarı**
+> yanıtları zarfsız, çıplak DTO döner (global TransformInterceptor yoktur).
+> Aşağıdaki endpoint tabloları başlangıç tasarımıdır; bağlayıcı katalog
+> controller'lardadır. Bkz. Bölüm 17.
+
 ### Auth (`@Public` olanlar hariç JwtAuthGuard)
 
 | Method | URL | Roller | DTO | Yanıt / Hatalar |
@@ -1265,6 +1293,13 @@ export class ExternalSmsProvider implements SmsProvider {
 ```
 
 ### StorageProvider
+
+> **Uygulama notu (Faz 9):** Uygulanan interface farklıdır
+> (`finalize` / `openReadStream` / `delete` / `deleteTemp`,
+> `src/infrastructure/storage/storage-provider.interface.ts`). Yalnız
+> `LocalStorageProvider` mevcuttur; S3 implementasyonu ve signed URL yoktur.
+> İndirme, kimlik doğrulamalı streaming `GET /attachments/:id/download`
+> endpoint'iyle yapılır. Bkz. Bölüm 17.
 
 ```typescript
 // infrastructure/storage/storage-provider.interface.ts
@@ -1906,6 +1941,12 @@ JWT secret rotasyonu: `JWT_ACCESS_SECRET` virgülle çoklu değeri destekleyecek
 
 ### Dockerfile (multi-stage)
 
+> **Uygulama notu (Faz 9):** Uygulanan Dockerfile `node:24-alpine` kullanır,
+> build aşamasında `npm prune --omit=dev` çalıştırır (runtime imajında Prisma
+> CLI yoktur; `prisma migrate deploy` build-stage imajıyla koşulur) ve
+> `CMD ["node", "dist/src/main.js"]` ile başlar (`npm run start:prod` ile
+> aynı). Bkz. Bölüm 17.
+
 ```dockerfile
 FROM node:20-alpine AS deps
 WORKDIR /app
@@ -1984,6 +2025,13 @@ docker compose up api
 
 ### Seed verisi (prisma/seed.ts özeti)
 
+> **Uygulama notu (Faz 9):** Seed, Faz 9'da uygulandı: `prisma/seed.ts`,
+> `npm run db:seed` ile açık çağrılır, idempotent'tir ve
+> `NODE_ENV=production`'da fail-fast eder. Kapsam sadeleştirildi: ticket ve
+> invoice seed'lenmez (manuel kabul akışı API üzerinden üretir). OTP'ye
+> development'ta debug log ile değil, dev-only in-memory SMS inbox
+> endpoint'iyle erişilir. Bkz. Bölüm 17.
+
 ```text
 Kullanıcılar (telefonlar TR test aralığı +90 5xx ... kurgusal):
   OPERATIONS: Operasyon Bir       +905550000001
@@ -2012,6 +2060,12 @@ NODE_ENV=development'a özel test yardımcıları kullanılır.
 ---
 
 ## Bölüm 16: Uygulama Sırası (Fazlar)
+
+> **Uygulama notu (Faz 9):** Faz 1–8 tamamlanmış ve main'e merge edilmiştir.
+> Faz 9'un gerçek kapsamı `docs/phase-9-plan.md`'dedir (CI, belge revizyonu,
+> seed, manuel kabul, config sertleştirmesi, runbook). Aşağıdaki Faz 9
+> tanımındaki yük testi, penetrasyon kontrol listesi, Swagger koruması ve
+> OTP/session temizlik job'ları sonraki fazlara ertelenmiştir. Bkz. Bölüm 17.
 
 **Faz 0 — İskelet (3-4 gün)**
 Repo, strict tsconfig, ESLint/Prettier, NestJS iskeleti, ConfigModule + Zod fail-fast, PrismaService, global exception filter + response zarfı, request-id, structured logger, Docker compose, CI'da Testcontainers.
@@ -2042,6 +2096,38 @@ OutboxRelay (interval, backoff), NotificationDispatcher, acil arıza SMS'i, `Con
 
 **Faz 9 — Sertleştirme ve yayın (1 hafta)**
 Helmet/CORS/Swagger prod koruması, OTP/session temizlik job'ları, KVKK maskeleme denetimi, yük testi, penetrasyon kontrol listesi (IDOR, enumeration, rate limit), dokümantasyon.
+
+---
+
+## Bölüm 17: Uygulama Sonrası Mimari Revizyon (Faz 1–8)
+
+Bu bölüm Faz 9'da eklendi. Faz 1–8 uygulaması ile bu belgenin başlangıç
+tasarımı arasındaki bilinen farkların bağlayıcı kaydıdır. Çelişki durumunda
+bu bölüm, `docs/implementation-overrides.md` ve kaynak kod geçerlidir.
+Tarihsel metin silinmemiş, yalnız "Uygulama notu (Faz 9)" kutularıyla
+işaretlenmiştir.
+
+| # | Konu | Bu belgedeki hüküm | Uygulanan gerçeklik | Kanıt |
+| --- | --- | --- | --- | --- |
+| 1 | Başarı yanıt zarfı | Bölüm 11: "Tüm cevaplar `{ success, data \| error }` zarfındadır" | Yalnız **hata** yanıtları zarflıdır (`{ success:false, error:{ code, message, requestId, timestamp, details? } }`); başarı yanıtları çıplak DTO döner, global TransformInterceptor yoktur | `src/common/filters/global-exception.filter.ts`, `src/common/types/error-response.type.ts` |
+| 2 | Repository export kuralı | Bölüm 1: modüller birbirinin repository'sine doğrudan dokunmaz | Kural geçerlidir; iki bilinçli istisna vardır: `MembershipsModule` (`SiteMembershipRepository`, `ResidentUnitAssignmentRepository`, `MembershipQueryService`, `SiteScopeGuard` export eder — tenant kapsam doğrulaması için ortak altyapı) ve `FacilitiesModule` (`FacilityRepository`, `FacilityService` export eder) | `src/modules/memberships/memberships.module.ts`, `src/modules/facilities/facilities.module.ts` |
+| 3 | `NotificationDelivery` modeli | Yok | Faz 8'de eklendi: `notification_deliveries` tablosu; dispatcher exactly-once fan-out ile delivery satırları üretir, delivery relay at-least-once SMS gönderir; `status`, `attemptCount`, `nextAttemptAt`, `failedAt`, `lastError` alanları ve `[sourceEventId, recipientPhone, channel]` unique kısıtı vardır | `prisma/schema.prisma`, `src/modules/notifications/notification-dispatcher.service.ts`, `src/modules/notifications/notification-delivery-relay.service.ts` |
+| 4 | `OutboxEvent.failedAt` | Yok (Bölüm 5) | Kalıcı başarısızlıkta (`attemptCount >= OUTBOX_MAX_ATTEMPTS` veya non-retryable hata) `status=FAILED` + `failedAt` yazılır | `prisma/schema.prisma`, `src/modules/notifications/outbox-relay.service.ts` |
+| 5 | `Contract.expiryNotifiedAt` | Yok (Bölüm 5) | `ContractExpiring` tarama job'ının idempotency işaretidir; aynı sözleşme için bildirimin tekrar üretilmesini engeller | `prisma/schema.prisma`, `src/modules/contracts/jobs/contract-expiring-scan.job.ts` |
+| 6 | Attachment erişimi | Signed URL: `StorageProvider.getSignedUrl`, `GET /attachments/:id/url` (5 dk TTL), Ek B'de private bucket + signed URL | Signed URL yoktur. İndirme kimlik doğrulamalı streaming `GET /attachments/:id/download` endpoint'iyle yapılır (policy parent ticket üzerinden yeniden doğrulanır, `X-Content-Type-Options: nosniff`). Uygulanan interface: `finalize` / `openReadStream` / `delete` / `deleteTemp` | `src/modules/attachments/controllers/attachment-download.controller.ts`, `src/infrastructure/storage/storage-provider.interface.ts` |
+| 7 | Storage implementasyonları | Faz 6: local + S3/MinIO | Yalnız `LocalStorageProvider` vardır; `STORAGE_PROVIDER=s3` seçilirse uygulama fail-fast eder. S3 sonraki faza bırakıldı | `src/infrastructure/storage/storage.module.ts` |
+| 8 | SMS provider | `ExternalSmsProvider` production placeholder (Netgsm vb.) | Yalnız `MockSmsProvider` vardır; `SMS_PROVIDER=external` implement edilmediği için config doğrulamasında açıkça reddedilir (Faz 9 kuralı). Gerçek SMS entegrasyonu sonraki faza bırakıldı | `src/infrastructure/sms/sms.module.ts`, `src/config/validation.schema.ts` |
+| 9 | WhatsApp / E-posta / Push | Ek C: gelecek genişleme noktası | Kodda hiçbir karşılığı yoktur; sonraki fazlara bırakıldı | — |
+| 10 | REST endpoint kataloğu | Bölüm 11 tabloları | Bağlayıcı katalog controller'lardadır. Belirgin eklemeler: `POST /sites/:siteId/users/:userId/deactivate`, `POST /sites/:siteId/units/:unitId/assignments/:assignmentId/deactivate` (users); `POST /assignments/:id/cancel`; `PATCH /tickets/:id`, `POST /tickets/:id/cancel`, `GET /tickets/:id/history`; `GET /attachments/:id/download`; contracts/billing endpoint'leri (`POST /contracts`, `PATCH /contracts/:id`, `GET /sites/:siteId/contracts`, `POST /contracts/:id/invoices`, `PATCH /invoices/:id/status`, `GET /sites/:siteId/invoices`) | `src/modules/**/**.controller.ts` |
+| 11 | Notifications mimarisi | Bölüm 3: "MVP: SMS + log", tek dispatcher | Faz 8: iki aşamalı pipeline — `OutboxRelay` (SKIP LOCKED claim + lease + exponential backoff) → `NotificationDispatcher` (exactly-once, Zod payload doğrulaması) → `NotificationDeliveryRelay` (at-least-once SMS). Kill-switch: `OUTBOX_RELAY_ENABLED`; `NODE_ENV=test`'te her zaman kapalı | `src/modules/notifications/` |
+| 12 | Zamanlanmış job'lar | Faz 8 planında | `ContractExpiringScanJob` ve `InvoiceOverdueScanJob`, cron `0 2 * * *` (UTC), dinamik kayıt + kill-switch `BACKGROUND_JOBS_ENABLED`; API prosesinde çalışır, ayrı worker prosesi yoktur | `src/modules/contracts/jobs/`, `src/modules/billing/jobs/` |
+| 13 | Rate limiting | Bölüm 8 pseudocode | `rate-limiter-flexible` ile in-memory, yalnız OTP akışlarında (`otpPhone` 3/600s, `otpIp` 10/600s, `otpCooldown`, `otpVerifyIp` 20/600s); eşikler kodda sabittir, env'e taşınması sonraki faza bırakıldı | `src/infrastructure/rate-limit/rate-limiter.service.ts` |
+| 14 | Docker / çalıştırma | `node:20-alpine`, `CMD ["node", "dist/main.js"]` | `node:24-alpine`; `npm prune --omit=dev` (runtime imajında Prisma CLI yok, `migrate deploy` build-stage imajıyla koşulur); `CMD ["node", "dist/src/main.js"]`; `npm run start:prod` aynı komutu çalıştırır | `Dockerfile`, `package.json` |
+| 15 | Seed | Bölüm 15'te planlandı | Faz 9'da uygulandı: `prisma/seed.ts`, `npm run db:seed`, idempotent (upsert), `NODE_ENV=production`'da fail-fast; ticket/invoice seed'lenmez | `prisma/seed.ts` |
+| 16 | Faz durumu | Bölüm 16 sıralama listesi | Faz 1–8 tamamlandı ve main'e merge edildi. Faz 9 kapsamı `docs/phase-9-plan.md`'dedir; yük testi, pentest kontrol listesi, Swagger, OTP/session temizlik job'ları sonraki fazlara ertelendi | `docs/phase-9-plan.md`, git geçmişi |
+
+Yeni bir belge-kod farkı tespit edildiğinde bu tabloya satır eklenir; bu
+belgenin tarihsel bölümleri yeniden yazılmaz.
 
 ---
 

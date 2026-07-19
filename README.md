@@ -36,19 +36,20 @@ ihtiyaçları çözer:
 
 ## 3. Güncel Geliştirme Durumu
 
-- Faz 1–5 tamamlanmıştır.
+- Faz 1–8 tamamlanmış ve `main` dalına merge edilmiştir.
 - Backend, NestJS ile geliştirilmektedir; frontend veya mobil uygulama
   bulunmamaktadır.
-- Gerçek bir SMS sağlayıcı entegre edilmemiştir; OTP kodları mock SMS
-  sağlayıcı (`SMS_PROVIDER=mock`) ile "gönderilir".
-- Dosya ekleri (attachment), sözleşme/faturalama (contract/billing) ve
-  bildirim (notification) modülleri henüz uygulanmamıştır; bu alanlara ait
-  bazı veri modelleri Prisma şemasında hazır olsa da servis/endpoint
-  katmanları yoktur.
+- Gerçek bir SMS sağlayıcı entegre edilmemiştir; OTP kodları ve bildirimler
+  mock SMS sağlayıcı (`SMS_PROVIDER=mock`) ile "gönderilir".
+- Dosya ekleri (attachment) yerel depolama (`STORAGE_PROVIDER=local`) ile
+  uçtan uca çalışır; S3 implementasyonu yoktur.
+- Sözleşme/faturalama (contract/billing) ve bildirim (notifications, outbox
+  relay, delivery relay) modülleri uygulanmıştır; `ContractExpiring` ve
+  `InvoiceOverdue` tarama job'ları API prosesinde çalışır.
 - Malzeme kataloğu için CRUD endpointi yoktur; yalnızca aktif malzeme
   doğrulaması (lookup) yapılır.
 
-## 4. Tamamlanan Fazlar (Faz 1–5)
+## 4. Tamamlanan Fazlar (Faz 1–8)
 
 | Faz | Kapsam |
 |---|---|
@@ -57,23 +58,22 @@ ihtiyaçları çözer:
 | Faz 3 | Facility (SITE/BLOCK/UNIT/COMMON_AREA), membership ve kullanıcı yönetimi: site ağacı oluşturma, sakin onboarding, site kullanıcı listesi, profil güncelleme, site bazlı ve global deaktivasyon, `SiteScopeGuard`, cursor pagination. |
 | Faz 4 | Ticket çekirdeği: ticket oluşturma/listeleme/güncelleme, durum geçişi, iptal, geçmiş; `TicketStateMachine`'in tam tanımı; SLA hedef hesaplama; outbox'a yalnızca yazma (`publishInTx`), henüz relay/tüketici yok. |
 | Faz 5 | Assignment ve malzeme yönetimi: teknisyen atama/yeniden atama, kabul/red, durum olayları (yola çıktı, vardı, başladı, malzeme bekliyor, devam, tamamlandı), atanmış ticket iptali, malzeme kullanım kayıtları; `TicketAssignmentWorkflowService` ile ticket ve assignment güncellemelerinin tek transaction'da orkestrasyonu. |
+| Faz 6 | Attachments: multipart yükleme (Multer, 10 MB, tek dosya), MIME + magic-byte doğrulaması (JPEG/PNG/WebP), `LocalStorageProvider` (SHA-256 checksum, atomik rename, path-traversal koruması), kimlik doğrulamalı streaming indirme (`GET /attachments/:id/download`), assignment-ticket bütünlüğü için composite foreign key. |
+| Faz 7 | Contracts & Billing: sözleşme oluşturma/güncelleme (aktif dönem çakışması EXCLUDE constraint ile engellenir), fatura oluşturma/durum geçişi (aynı dönem için ikinci fatura engeli), site kapsamlı salt-okuma listeleri, SLA hedefinin ticket oluşturma anındaki sözleşmeden hesaplanması. |
+| Faz 8 | Notifications & Outbox relay: `OutboxRelay` (`FOR UPDATE SKIP LOCKED` claim + lease + exponential backoff), `NotificationDispatcher` (exactly-once fan-out, Zod payload doğrulaması), `NotificationDeliveryRelay` (at-least-once SMS), `NotificationDelivery` modeli, `ContractExpiring`/`InvoiceOverdue` cron job'ları (her gün 02:00 UTC), kill-switch'ler (`OUTBOX_RELAY_ENABLED`, `BACKGROUND_JOBS_ENABLED`). |
 
 ## 5. Kapsamda Olmayan veya Henüz Tamamlanmayan Özellikler
 
-- Dosya eki (attachment) yükleme endpointleri (Prisma modeli `TicketAttachment`
-  hazır, controller/servis yok).
-- Sözleşme (contract) CRUD ve faturalama (billing/invoice) endpointleri
-  (Prisma modelleri `Contract`/`ContractInvoice` hazır; yalnızca ticket SLA
-  hesaplaması için dar kapsamlı bir okuma servisi — `ContractQueryService` —
-  vardır).
-- Bildirim (notification) gönderimi ve outbox olaylarının tüketilmesi
-  (relay); mevcut outbox yalnızca transaction içinde olay yazar.
 - Gerçek SMS sağlayıcı entegrasyonu (yalnızca mock sağlayıcı vardır;
-  `SMS_PROVIDER=external` için gerekli env doğrulaması hazırdır fakat gerçek
-  bir dış sağlayıcı implementasyonu yoktur).
-- Nesne depolama (S3) veya yerel dosya depolama akışı fiilen kullanılmaz;
-  ilgili environment değişkenleri ileride attachment özelliği için
-  hazırlanmıştır.
+  `SMS_PROVIDER=external` seçilirse uygulama bilinçli olarak başlatılamaz —
+  implementasyon sonraki faza bırakılmıştır).
+- Nesne depolama (S3/MinIO) implementasyonu (yalnızca yerel depolama vardır;
+  `STORAGE_PROVIDER=s3` seçilirse uygulama bilinçli olarak başlatılamaz).
+- WhatsApp, e-posta ve push bildirim kanalları (yalnızca SMS kanalı vardır,
+  o da mock sağlayıcıyla çalışır).
+- Ödeme (payment gateway) ve e-fatura entegrasyonu (fatura durumları API
+  üzerinden manuel işaretlenir; `OVERDUE` yalnızca zamanlanmış job tarafından
+  atanır).
 - Malzeme kataloğu CRUD endpointi (malzeme ekleme/düzenleme/listeleme
   endpointi yoktur; yalnızca mevcut ve aktif bir malzemenin doğrulanması
   yapılır).
@@ -116,7 +116,9 @@ bölüm 20).
 - **Runtime:** Node.js `>=24.0.0`
 - **Paket yöneticisi:** npm (`package-lock.json` ile sabitlenmiş sürümler)
 - **Framework:** NestJS 11 (`@nestjs/common`, `@nestjs/core`,
-  `@nestjs/platform-express`, `@nestjs/config`, `@nestjs/jwt`)
+  `@nestjs/platform-express`, `@nestjs/config`, `@nestjs/jwt`,
+  `@nestjs/schedule`)
+- **Dosya yükleme:** `multer` (`FileInterceptor`, disk tabanlı geçici dosya)
 - **Dil:** strict TypeScript 5.7
 - **Veritabanı:** PostgreSQL 16
 - **ORM:** Prisma 7, `prisma-client` generator, `@prisma/adapter-pg` driver
@@ -131,10 +133,12 @@ bölüm 20).
 
 - Modüler NestJS yapısı: her domain kendi klasöründe (`src/modules/*`)
   ayrı bir Nest modülü olarak tanımlıdır (`auth`, `memberships`,
-  `facilities`, `users`, `tickets`, `materials`, `assignments`, `health`).
+  `facilities`, `users`, `tickets`, `materials`, `assignments`,
+  `attachments`, `contracts`, `billing`, `notifications`, `health`).
 - Global environment/config katmanı (`ConfigModule.forRoot`) Zod ile
   doğrulanmış tipli config namespace'leri sağlar (`app`, `cors`, `logging`,
-  `database`, `auth`, `tickets`).
+  `database`, `auth`, `tickets`, `storage`, `outboxRelay`, `contracts`,
+  `backgroundJobs`).
 - Kimlik doğrulama ve rol kontrolü global guard olarak uygulanır
   (`JwtAuthGuard`, `RolesGuard`); `@Public()` ile açık uçlar, `@Roles(...)`
   ile rol kısıtlaması tanımlanır.
@@ -227,16 +231,28 @@ Uygulama katmanında:
 prisma/
   schema.prisma
   migrations/
+docs/
+  architecture.md
+  implementation-overrides.md
+  phase-1-plan.md ... phase-9-plan.md
+  operations-runbook.md
 src/
   main.ts
   app.module.ts
   config/
     configuration.ts
     validation.schema.ts
+  common/
+    constants/ decorators/ errors/ filters/ guards/ types/ utils/ validators/
   infrastructure/
-    logging/
+    audit/
     database/
       prisma/
+    events/
+    logging/
+    rate-limit/
+    sms/
+    storage/
   generated/
     prisma-client/
   modules/
@@ -250,12 +266,21 @@ src/
     assignments/
       state/
       services/
+    attachments/
+      controllers/ interceptors/ security/ services/
+    contracts/
+      jobs/ services/
+    billing/
+      jobs/ services/
+    notifications/
     health/
 test/
   integration/
     setup/
   e2e/
     support/
+var/
+  uploads/
 docker-compose.yml
 Dockerfile
 prisma.config.ts
@@ -325,11 +350,20 @@ Değişken adları `.env.example` dosyasındaki adlarla birebir aynıdır.
 | `CORS_ALLOWED_ORIGINS` | Virgülle ayrılmış izinli origin listesi |
 | `LOG_LEVEL` | `debug` \| `info` \| `warn` \| `error` |
 | `EMERGENCY_SLA_HOURS` | `EMERGENCY` öncelikli ticket'lar için sabit SLA hedefi (yalnızca sözleşmede `emergencyCoverage=true` iken kullanılır) |
+| `OUTBOX_RELAY_ENABLED` | `true` \| `false`. Outbox ve notification delivery relay'lerinin kill-switch'i. Production'da açıkça verilmesi zorunludur; development'ta verilmezse `true` kabul edilir; `NODE_ENV=test`'te relay'ler her zaman kapalıdır. |
+| `OUTBOX_RELAY_POLL_INTERVAL_MS` | Relay polling aralığı, milisaniye (varsayılan `5000`) |
+| `OUTBOX_RELAY_BATCH_SIZE` | Bir polling turunda claim edilecek kayıt sayısı (varsayılan `20`) |
+| `OUTBOX_MAX_ATTEMPTS` | Kalıcı `FAILED` işaretlemesi öncesi maksimum deneme sayısı (varsayılan `10`) |
+| `OUTBOX_CLAIM_LEASE_MS` | Claim lease süresi, milisaniye (varsayılan `60000`) |
+| `CONTRACT_EXPIRY_LEAD_DAYS` | `ContractExpiring` bildirimi için sona erme eşiği, gün (varsayılan `30`) |
+| `BACKGROUND_JOBS_ENABLED` | `true` \| `false`. Zamanlanmış tarama job'larının (`ContractExpiring`, `InvoiceOverdue`) kill-switch'i. Production'da açıkça verilmesi zorunludur; `NODE_ENV=test`'te job'lar her zaman kapalıdır. |
 
 Koşullu doğrulama Zod şeması içinde (`src/config/validation.schema.ts`)
 uygulanır ve yalnızca parse edilmiş nesne üzerinden çalışır:
 
 - `NODE_ENV=production` iken `SMS_PROVIDER=mock` reddedilir.
+- `NODE_ENV=production` iken `OUTBOX_RELAY_ENABLED` ve
+  `BACKGROUND_JOBS_ENABLED` açıkça verilmek zorundadır.
 - `SMS_PROVIDER=external` ise `SMS_API_URL`/`SMS_API_KEY` zorunlu olur.
 - `STORAGE_PROVIDER=local` ise `STORAGE_LOCAL_PATH` zorunlu olur.
 - `STORAGE_PROVIDER=s3` ise region/bucket/access key/secret key zorunlu olur.
@@ -646,6 +680,30 @@ Tüm yollar `/api/v1` prefix'i ile başlar. Global guard'lar nedeniyle
 | POST | `/assignments/:id/materials` | TECHNICIAN, OPERATIONS | Malzeme kullanımı ekler |
 | GET | `/assignments/:id/materials` | TECHNICIAN, SITE_MANAGER, OPERATIONS | Malzeme kayıtlarını listeler |
 
+### attachments
+
+| Method | Endpoint | Roller | Açıklama |
+|---|---|---|---|
+| POST | `/tickets/:ticketId/attachments` | RESIDENT, SITE_MANAGER, OPERATIONS, TECHNICIAN | Multipart dosya yükler (alan adı `file`; JPEG/PNG/WebP, en fazla 10 MB) |
+| GET | `/tickets/:ticketId/attachments` | RESIDENT, SITE_MANAGER, OPERATIONS, TECHNICIAN | Ticket eklerini listeler (cursor pagination) |
+| GET | `/attachments/:id/download` | RESIDENT, SITE_MANAGER, OPERATIONS, TECHNICIAN | Eki stream ederek indirir (policy parent ticket üzerinden yeniden doğrulanır) |
+
+### contracts
+
+| Method | Endpoint | Roller | Açıklama |
+|---|---|---|---|
+| POST | `/contracts` | OPERATIONS | Sözleşme oluşturur |
+| PATCH | `/contracts/:id` | OPERATIONS | Sözleşmeyi günceller (durum geçişi dahil) |
+| GET | `/sites/:siteId/contracts` | SITE_MANAGER, OPERATIONS | Site sözleşmelerini listeler (SiteScopeGuard) |
+
+### invoices
+
+| Method | Endpoint | Roller | Açıklama |
+|---|---|---|---|
+| POST | `/contracts/:id/invoices` | OPERATIONS | Fatura oluşturur |
+| PATCH | `/invoices/:id/status` | OPERATIONS | Fatura durumunu değiştirir (manuel `OVERDUE` reddedilir) |
+| GET | `/sites/:siteId/invoices` | SITE_MANAGER, OPERATIONS | Site faturalarını listeler (SiteScopeGuard) |
+
 ### health
 
 | Method | Endpoint | Roller | Açıklama |
@@ -725,9 +783,16 @@ tam liste kaynak kodda ilgili domain error tanımlarında yer alır.
 - Audit kayıtlarında serbest metin gerekçe/not alanları ham olarak
   taşınmaz.
 - `OutboxEvent` modeli (`status`: `PENDING`, `PROCESSING`, `PROCESSED`,
-  `FAILED`) mevcuttur; mevcut `OutboxService` yalnızca transaction içinde
-  olay yazar (`publishInTx`). Olayları tüketen bir relay/consumer henüz
-  uygulanmamıştır.
+  `FAILED`) mevcuttur; domain servisleri olayları transaction içinde yazar
+  (`OutboxService.publishInTx`).
+- Faz 8 ile olaylar tüketilir: `OutboxRelay`, PENDING olayları
+  `FOR UPDATE SKIP LOCKED` ile claim eder (lease + exponential backoff);
+  `NotificationDispatcher` olay başına `NotificationDelivery` satırlarını
+  exactly-once üretir; `NotificationDeliveryRelay` SMS gönderimini
+  at-least-once yürütür. Kalıcı başarısızlık `FAILED` + `failedAt` +
+  `lastError` ile işaretlenir.
+- `ContractExpiring` ve `InvoiceOverdue` tarama job'ları her gün 02:00
+  UTC'de çalışır; `BACKGROUND_JOBS_ENABLED=false` ile kapatılabilir.
 
 ## 31. Test Yapısı
 
@@ -745,13 +810,14 @@ paylaşılır.
 
 ## 32. Güncel Doğrulanmış Test Sonuçları
 
-- Unit: 23 suite / 243 test
-- Integration: 14 suite / 54 test
-- E2E: 4 suite / 20 test
+- Unit: 577 test
+- Integration: 133 test
+- E2E: 42 test
 - Integration ve E2E testleri gerçek PostgreSQL/Testcontainers ile geçmiştir.
 - Lint, build, Prisma format/validate ve Docker Compose config kontrolleri
   başarılıdır.
-- Faz 1–4 regresyonu yoktur.
+- Sayılar Faz 8 kabul doğrulamasına aittir; Faz 9 ile eklenen GitHub Actions
+  CI, aynı doğrulamayı her pull request ve main push'ta yeniden çalıştırır.
 
 ## 33. Git Branch ve Pull Request Çalışma Biçimi
 
@@ -761,48 +827,45 @@ dalına Pull Request ile birleştirildiği bir akış izler, örneğin:
 `main`'e merge edilmiştir. Commit mesajları `feat: complete phase N ...`
 biçimindedir.
 
-## 34. Faz 6–9 Planlanan Yol Haritası
+## 34. Faz 9 ve Sonrası Yol Haritası
 
-Aşağıdaki kapsam yalnızca Prisma şemasından tahmin edilmemiştir; genel
-kapsam mimari belgede (`docs/architecture.md`) yer almaktadır. Her fazın
-ayrıntılı teknik kararları, ilgili fazın implementasyon planı onaylandığında
-kesinleşecektir.
+Faz 6–8, bölüm 4'teki tabloda özetlendiği şekilde tamamlanmıştır.
 
-- **Faz 6 — Attachments:** Ticket/assignment'a dosya eki yükleme, `local`/`s3`
-  storage sağlayıcı entegrasyonu, `assignmentId` verildiğinde
-  `ticketId` eşleşme doğrulaması.
-- **Faz 7 — Contracts & Billing:** Sözleşme CRUD, fatura (invoice)
-  oluşturma/listeleme, ödeme durumu takibi.
-- **Faz 8 — Notifications & Outbox Relay:** Outbox olaylarının tüketilmesi,
-  SMS/push bildirim gönderimi.
-- **Faz 9 — Üretime hazırlık:** Güvenlik sertleştirmesi, deployment ve
-  yayın hazırlığı, gözlemlenebilirlik/monitoring, Swagger/OpenAPI
-  dokümantasyonu, gerçek SMS sağlayıcı entegrasyonu, performans ve
-  güvenlik testleri.
+- **Faz 9 — Sertleştirme, CI ve Dokümantasyon (bu faz):** GitHub Actions CI
+  (lint/build/test + production Docker boot smoke), `docs/architecture.md`
+  revizyonu (Bölüm 17), idempotent development seed (`npm run db:seed`),
+  Bruno manuel kabul koleksiyonu, production config fail-fast
+  sertleştirmesi, operasyon runbook'ları. Ayrıntı: `docs/phase-9-plan.md`.
+- **Faz 10+ (öneri, planlanmadı):** Gerçek SMS sağlayıcı entegrasyonu,
+  WhatsApp/e-posta/push kanalları, S3 uyumlu nesne depolama, ödeme ve
+  e-fatura entegrasyonu, Swagger/OpenAPI, monitoring/alerting altyapısı,
+  yük ve penetrasyon testleri, rate-limit eşiklerinin env'e taşınması.
 
 ## 35. Üretime Geçmeden Önce Yapılması Gerekenler
 
-- Gerçek bir SMS sağlayıcı entegre edilmeli (`SMS_PROVIDER=external`).
-- Attachment özelliği tamamlanmadan önce gerçek nesne depolama (S3) veya
-  yerel depolama akışı uçtan uca test edilmeli.
-- Outbox relay/consumer uygulanmalı; bildirim gönderimi olmadan outbox
-  olayları yalnızca veritabanında birikir.
-- Sözleşme/faturalama modülleri tamamlanmadan gelir etkileyen akışlar
-  devreye alınmamalı.
+- Gerçek bir SMS sağlayıcı entegre edilmeli; OTP girişi SMS'e bağımlı
+  olduğundan gerçek sağlayıcı olmadan production açılamaz
+  (`SMS_PROVIDER=external` bugün bilinçli olarak boot'ta reddedilir).
 - Production secret'ları (`JWT_ACCESS_SECRET`, `REFRESH_TOKEN_PEPPER`,
   `OTP_HMAC_SECRET` vb.) güvenli bir secret yönetimi aracıyla sağlanmalı,
   `.env` dosyası ile production'a taşınmamalı.
 - `CORS_ALLOWED_ORIGINS` production domain'leri ile güncellenmeli.
-- Rate limit eşikleri gerçek trafik beklentisine göre gözden geçirilmeli.
+- Rate limit eşikleri gerçek trafik beklentisine göre gözden geçirilmeli
+  (eşikler bugün kodda sabittir, bkz.
+  `src/infrastructure/rate-limit/rate-limiter.service.ts`).
 - Swagger/OpenAPI dokümantasyonu eklenmeli.
 - Yük/performans testleri ve güvenlik değerlendirmesi (pen test) yapılmalı.
-- PostgreSQL için yedekleme ve felaket kurtarma (backup/DR) planı
-  oluşturulmalı.
-- Production için log seviyesi ve izleme/alerting altyapısı kurulmalı.
+- PostgreSQL yedekleme/geri yükleme prosedürü
+  (`docs/operations-runbook.md`) gerçek ortamda tatbik edilmeli ve
+  otomatikleştirilmeli.
+- Production için log rotation ve izleme/alerting altyapısı kurulmalı.
+- Kalıcı dosya depolama için S3 uyumlu bir sağlayıcı değerlendirilmeli
+  (tek sunucu diskindeki `var/uploads` yatay ölçeklenmez).
 
 ## 36. Lisans ve Proje Durumu
 
 - `package.json` içinde lisans `UNLICENSED`, paket `private: true` olarak
   işaretlidir.
-- Proje aktif geliştirme aşamasındadır; Faz 1–5 tamamlanmış olup üretime
-  hazır (production-ready) bir MVP değildir (bkz. bölüm 35).
+- Proje aktif geliştirme aşamasındadır; Faz 1–8 tamamlanmış olup gerçek
+  SMS sağlayıcısı entegre edilmeden üretime hazır (production-ready) bir
+  MVP değildir (bkz. bölüm 35).

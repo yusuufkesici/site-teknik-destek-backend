@@ -1,0 +1,26 @@
+meta {
+  name: 04 Invoice ISSUED
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{baseUrl}}/invoices/{{invoiceId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "status": "ISSUED"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq ISSUED
+}

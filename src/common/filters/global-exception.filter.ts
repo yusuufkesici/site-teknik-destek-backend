@@ -79,6 +79,20 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       };
     }
 
+    // Faz 9 Slice 4: express body-parser'in (json/urlencoded) limit asimi
+    // HttpException DEGIL, http-errors turevidir (type: 'entity.too.large',
+    // status: 413) ve router uzerinden buraya ham halde ulasir. Acik body
+    // limitiyle birlikte bu hata 500 INTERNAL_ERROR'a dusmek yerine 413 +
+    // VALIDATION_ERROR olarak eslenir. ATTACHMENT_TOO_LARGE bilincli olarak
+    // KULLANILMAZ - o kod yalniz Multer dosya siniri (multipart) icindir.
+    if (this.isRecord(exception) && exception.type === 'entity.too.large') {
+      return {
+        status: HttpStatus.PAYLOAD_TOO_LARGE,
+        code: ERROR_CODES.VALIDATION_ERROR,
+        message: 'Istek govdesi izin verilen boyutu asiyor.',
+      };
+    }
+
     return {
       status: HttpStatus.INTERNAL_SERVER_ERROR,
       code: ERROR_CODES.INTERNAL_ERROR,

@@ -1,0 +1,21 @@
+meta {
+  name: 02 Ticket listeleme (RESIDENT)
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/tickets
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{residentToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.items: isDefined
+  res.body.items.length: gte 1
+}

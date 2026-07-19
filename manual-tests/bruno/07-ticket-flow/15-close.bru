@@ -1,0 +1,27 @@
+meta {
+  name: 15 Operations CLOSED (COMPLETED -> CLOSED)
+  type: http
+  seq: 15
+}
+
+post {
+  url: {{baseUrl}}/tickets/{{ticketId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "toStatus": "CLOSED",
+    "reason": "Sakin ile teyit edildi, is tamamlandi."
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.status: eq CLOSED
+}

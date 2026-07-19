@@ -1,0 +1,3 @@
+Bu dosya gercek bir JPEG degildir. Magic-byte dogrulamasinin
+ATTACHMENT_UNSUPPORTED_TYPE (415) dondurmesini test etmek icin uzantisi
+kasitli olarak .jpg birakilmis duz metin icerigidir.

@@ -1,0 +1,36 @@
+meta {
+  name: 03 RESIDENT OTP verify
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/otp/verify
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "phoneNumber": "{{residentPhone}}",
+    "code": "{{residentOtp}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.accessToken: isDefined
+  res.body.refreshToken: isDefined
+  res.body.user.role: eq RESIDENT
+}
+
+script:post-response {
+  bru.setVar("residentToken", res.body.accessToken);
+  bru.setVar("residentRefresh", res.body.refreshToken);
+}
+
+docs {
+  residentRefresh, pozitif zincir sonundaki refresh-rotation ve logout
+  adimlarinda; rotasyondan artakalan eski deger ise negatif refresh-reuse
+  senaryosunda kullanilir.
+}

@@ -1,0 +1,24 @@
+meta {
+  name: 14 Inaktif kullanici - dev inbox bos (404)
+  type: http
+  seq: 14
+}
+
+get {
+  url: {{baseUrl}}/dev/sms/{{disposablePhone}}/last-otp
+  body: none
+  auth: none
+}
+
+assert {
+  res.status: eq 404
+  res.body.error.code: eq NOT_FOUND
+}
+
+docs {
+  Bir onceki adim generic 200 dondurmus olsa da inaktif kullanici icin
+  OTP uretilmedigi dev inbox'in bos olmasiyla kanitlanir. Not: ayni
+  uygulama calismasi icinde gecici kullaniciyla daha once basarili OTP
+  istegi yapildiysa inbox'ta 5 dakikalik TTL suresince eski kayit
+  gorulebilir; senaryo temiz bir uygulama calismasinda kosulmalidir.
+}

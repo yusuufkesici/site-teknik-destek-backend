@@ -1,0 +1,199 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, build ve testler
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # prisma.config.ts, CLI komutlari (generate/validate) icin DATABASE_URL
+      # ister; gercek bir baglanti kurulmaz. Integration/e2e testleri kendi
+      # Testcontainers URI'larini process.env uzerinden set eder.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      NODE_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Bagimliliklari kur (postinstall prisma generate calistirir)
+        run: npm ci
+
+      - name: Prisma validate
+        run: npx prisma validate
+
+      - name: Prisma format kontrolu
+        run: |
+          npx prisma format
+          git diff --exit-code -- prisma/schema.prisma
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit testler
+        run: npm test
+
+      - name: Integration testler (Testcontainers)
+        run: npm run test:integration
+
+      - name: E2E testler (Testcontainers)
+        run: npm run test:e2e
+
+      - name: Docker Compose config kontrolu
+        run: |
+          cp .env.example .env
+          docker compose config -q
+
+      - name: npm audit (bilgilendirici)
+        continue-on-error: true
+        run: npm audit --omit=dev
+
+  docker-smoke:
+    name: Production imaj build ve boot smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build stage imajini olustur (Prisma CLI iceren)
+        run: docker build --target build -t app-build .
+
+      - name: Runtime imajini olustur
+        run: docker build --target runtime -t app-runtime .
+
+      - name: Smoke ortamini hazirla (network + PostgreSQL)
+        run: |
+          docker network create smoke
+          docker run -d --name smoke-db --network smoke \
+            -e POSTGRES_USER=app -e POSTGRES_PASSWORD=app \
+            -e POSTGRES_DB=site_support postgres:16-alpine
+          for i in $(seq 1 30); do
+            if docker exec smoke-db pg_isready -U app -d site_support; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "PostgreSQL hazir olmadi" >&2
+          exit 1
+
+      - name: Migration'lari temiz veritabanina uygula
+        run: |
+          docker run --rm --network smoke \
+            -e DATABASE_URL=postgresql://app:app@smoke-db:5432/site_support \
+            app-build npx prisma migrate deploy
+
+      - name: Production imajini gercek entrypoint ile boot et
+        run: |
+          docker run -d --name smoke-api --network smoke -p 3000:3000 \
+            -e NODE_ENV=development \
+            -e PORT=3000 \
+            -e DATABASE_URL=postgresql://app:app@smoke-db:5432/site_support \
+            -e JWT_ACCESS_SECRET=ci-smoke-jwt-access-secret-0123456789abcdef \
+            -e JWT_ACCESS_EXPIRES_IN=900 \
+            -e REFRESH_TOKEN_PEPPER=ci-smoke-refresh-pepper-0123456789abcdef \
+            -e REFRESH_TOKEN_EXPIRES_IN=1209600 \
+            -e OTP_HMAC_SECRET=ci-smoke-otp-hmac-secret-0123456789abcdef \
+            -e OTP_EXPIRES_IN_SECONDS=180 \
+            -e OTP_MAX_ATTEMPTS=5 \
+            -e OTP_RESEND_COOLDOWN_SECONDS=60 \
+            -e SMS_PROVIDER=mock \
+            -e STORAGE_PROVIDER=local \
+            -e STORAGE_LOCAL_PATH=/app/var/uploads \
+            -e CORS_ALLOWED_ORIGINS=http://localhost:3000 \
+            -e LOG_LEVEL=info \
+            -e EMERGENCY_SLA_HOURS=4 \
+            -e OUTBOX_RELAY_ENABLED=false \
+            -e BACKGROUND_JOBS_ENABLED=false \
+            app-runtime
+
+      - name: Liveness ve readiness smoke
+        run: |
+          ok=0
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:3000/api/v1/health/liveness; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ok" -ne 1 ]; then
+            echo "Liveness 200 donmedi" >&2
+            docker logs smoke-api >&2 || true
+            exit 1
+          fi
+          curl -fsS http://localhost:3000/api/v1/health/readiness
+          echo
+          echo "Boot smoke basarili"
+
+      - name: Production fail-fast smoke (mock SMS reddedilmeli)
+        run: |
+          set +e
+          timeout 60 docker run --rm --network smoke \
+            -e NODE_ENV=production \
+            -e PORT=3000 \
+            -e DATABASE_URL=postgresql://app:app@smoke-db:5432/site_support \
+            -e JWT_ACCESS_SECRET=ci-smoke-jwt-access-secret-0123456789abcdef \
+            -e JWT_ACCESS_EXPIRES_IN=900 \
+            -e REFRESH_TOKEN_PEPPER=ci-smoke-refresh-pepper-0123456789abcdef \
+            -e REFRESH_TOKEN_EXPIRES_IN=1209600 \
+            -e OTP_HMAC_SECRET=ci-smoke-otp-hmac-secret-0123456789abcdef \
+            -e OTP_EXPIRES_IN_SECONDS=180 \
+            -e OTP_MAX_ATTEMPTS=5 \
+            -e OTP_RESEND_COOLDOWN_SECONDS=60 \
+            -e SMS_PROVIDER=mock \
+            -e STORAGE_PROVIDER=local \
+            -e STORAGE_LOCAL_PATH=/app/var/uploads \
+            -e CORS_ALLOWED_ORIGINS=https://example.invalid \
+            -e LOG_LEVEL=info \
+            -e EMERGENCY_SLA_HOURS=4 \
+            -e OUTBOX_RELAY_ENABLED=false \
+            -e BACKGROUND_JOBS_ENABLED=false \
+            app-runtime 2>&1 | tee failfast.log
+          code=${PIPESTATUS[0]}
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "Beklenen: production + mock SMS boot'u reddedilmeliydi (cikis kodu 0 geldi)" >&2
+            exit 1
+          fi
+          if [ "$code" -eq 124 ]; then
+            echo "Beklenen: fail-fast; uygulama calismaya devam etti (timeout)" >&2
+            exit 1
+          fi
+          # Faz 9 Slice 4: basarisizligin SEBEBI de dogrulanir - beklenen,
+          # config validation'in mock-in-production mesajidir. MODULE_NOT_FOUND
+          # gibi bagimlilik/entrypoint hatalari basari SAYILMAZ.
+          if grep -q "MODULE_NOT_FOUND\|Cannot find module" failfast.log; then
+            echo "Fail-fast sebebi bagimlilik hatasi; validation hatasi bekleniyordu" >&2
+            exit 1
+          fi
+          if ! grep -q "Environment dogrulama hatasi" failfast.log; then
+            echo "Beklenen 'Environment dogrulama hatasi' mesaji logda yok" >&2
+            exit 1
+          fi
+          if ! grep -q "SMS_PROVIDER" failfast.log; then
+            echo "Beklenen SMS_PROVIDER validation mesaji logda yok" >&2
+            exit 1
+          fi
+          echo "Fail-fast dogrulandi (cikis kodu: $code, sebep: SMS provider validation)"
+
+      - name: Temizlik
+        if: always()
+        run: |
+          docker rm -f smoke-api smoke-db 2>/dev/null || true
+          docker network rm smoke 2>/dev/null || true

@@ -1,0 +1,21 @@
+meta {
+  name: 06 Panorama fatura listesi
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/sites/{{panoramaSiteId}}/invoices
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.items: isDefined
+  res.body.items.length: gte 1
+}

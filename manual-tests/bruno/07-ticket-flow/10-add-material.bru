@@ -1,0 +1,35 @@
+meta {
+  name: 10 Malzeme ekleme (TECHNICIAN)
+  type: http
+  seq: 10
+}
+
+post {
+  url: {{baseUrl}}/assignments/{{assignmentId}}/materials
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{techToken}}
+}
+
+body:json {
+  {
+    "materialId": "{{materialFuseId}}",
+    "quantity": "2",
+    "unitPrice": "150.00",
+    "suppliedBy": "COMPANY",
+    "note": "Eski sigorta arizaliydi, iki adet degistirildi."
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+}
+
+docs {
+  quantity/unitPrice bilincli olarak STRING'dir (JSON number precision
+  riski tasinmaz). Seed materyali: 16A Sigorta (SGT-16A).
+}

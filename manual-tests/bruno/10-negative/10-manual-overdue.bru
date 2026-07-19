@@ -1,0 +1,32 @@
+meta {
+  name: 10 Manuel OVERDUE girisimi - 409
+  type: http
+  seq: 10
+}
+
+patch {
+  url: {{baseUrl}}/invoices/{{invoiceId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "status": "OVERDUE"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.error.code: eq INVOICE_INVALID_STATUS_TRANSITION
+}
+
+docs {
+  OVERDUE hedefine API uzerinden HICBIR durumdan gecis acik degildir;
+  OVERDUE yalniz sistem tetiklemeli InvoiceOverdueScanJob tarafindan
+  uretilir.
+}

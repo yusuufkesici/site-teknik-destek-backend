@@ -1,0 +1,58 @@
+meta {
+  name: 03 Invoice olusturma (seed ACTIVE sozlesme)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/contracts/{{panoramaContractId}}/invoices
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "billingPeriodStart": "{{invPeriodStart}}",
+    "billingPeriodEnd": "{{invPeriodEnd}}",
+    "issueDate": "{{invIssueDate}}",
+    "dueDate": "{{invDueDate}}",
+    "amount": "15000.00",
+    "note": "Manuel kabul testi faturasi."
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.status: eq DRAFT
+  res.body.currency: eq TRY
+}
+
+script:pre-request {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const pad = (n) => String(n).padStart(2, "0");
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  bru.setVar("invPeriodStart", `${y}-${pad(m + 1)}-01`);
+  bru.setVar("invPeriodEnd", `${y}-${pad(m + 1)}-${pad(lastDay)}`);
+  bru.setVar("invIssueDate", `${y}-${pad(m + 1)}-01`);
+  bru.setVar("invDueDate", `${y}-${pad(m + 1)}-${pad(lastDay)}`);
+}
+
+script:post-response {
+  bru.setVar("invoiceId", res.body.id);
+}
+
+docs {
+  Donem dinamik olarak icinde bulunulan aya kurulur; boylece seed
+  sozlesmesinin faturalanabilir penceresi icinde kalir. Ayni donem icin
+  IKINCI fatura 409 INVOICE_PERIOD_OVERLAP doner - koleksiyon ayni ay
+  icinde tekrar kosulacaksa once DB sifirlanmalidir
+  (docs/manual-acceptance.md "Test ortamini yeniden baslatma").
+  currency client'tan alinmaz, sozlesmeden kopyalanir (seed: TRY).
+}

@@ -1,0 +1,26 @@
+meta {
+  name: 13 Attachment download (RESIDENT)
+  type: http
+  seq: 13
+}
+
+get {
+  url: {{baseUrl}}/attachments/{{attachmentId}}/download
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{residentToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.headers['content-type']: eq image/jpeg
+}
+
+docs {
+  Signed URL yerine authenticated stream endpoint'i kullanilir (yerel
+  storage'ta presigned URL karsiligi yoktur). Yetki parent ticket
+  uzerinden yeniden dogrulanir.
+}

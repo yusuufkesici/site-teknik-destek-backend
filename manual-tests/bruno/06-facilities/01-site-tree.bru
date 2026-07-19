@@ -1,0 +1,26 @@
+meta {
+  name: 01 Panorama site agaci (SITE_MANAGER)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/facilities/sites/{{panoramaSiteId}}/tree
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{managerToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: eq {{panoramaSiteId}}
+}
+
+docs {
+  Seed verisi: Panorama Evleri > A Blok > Daire 1 / Daire 2 + Elektrik
+  Odasi. SiteScopeGuard geregi yalniz kendi sitesinin yoneticisi (veya
+  OPERATIONS) agaci gorebilir.
+}

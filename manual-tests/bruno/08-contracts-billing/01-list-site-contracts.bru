@@ -1,0 +1,27 @@
+meta {
+  name: 01 Panorama sozlesme listesi (seed dogrulama)
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/sites/{{panoramaSiteId}}/contracts
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+assert {
+  res.status: eq 200
+  res.body.items: isDefined
+  res.body.items.length: gte 1
+}
+
+docs {
+  Seed sozlesmesi SEED-PNR-ACTIVE (ACTIVE, icinde bulunulan yil) listede
+  gorunmelidir. Fatura adimlari bu seed sozlesmesini kullanir
+  ({{panoramaContractId}}).
+}

@@ -1,0 +1,31 @@
+meta {
+  name: 03 Logout (RESIDENT)
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/auth/logout
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{residentToken}}
+}
+
+body:json {
+  {
+    "refreshToken": "{{residentRefresh}}"
+  }
+}
+
+assert {
+  res.status: eq 204
+}
+
+docs {
+  Logout, rotasyondan cikan GUNCEL refresh token ile yapilir ve ilgili
+  session'i revoke eder. Access token TTL suresi boyunca teknik olarak
+  gecerli kalir; kabul kriteri session revocation'dur.
+}

@@ -47,26 +47,6 @@ export interface ListForTechnicianFilter {
   limit: number;
 }
 
-const ASSIGNMENT_COLUMNS = `
-  id,
-  ticket_id AS "ticketId",
-  technician_id AS "technicianId",
-  assigned_by_user_id AS "assignedByUserId",
-  assignment_status AS "assignmentStatus",
-  assigned_at AS "assignedAt",
-  accepted_at AS "acceptedAt",
-  rejected_at AS "rejectedAt",
-  rejection_reason AS "rejectionReason",
-  en_route_at AS "enRouteAt",
-  arrived_at AS "arrivedAt",
-  started_at AS "startedAt",
-  completed_at AS "completedAt",
-  resolution_note AS "resolutionNote",
-  is_current AS "isCurrent",
-  created_at AS "createdAt",
-  updated_at AS "updatedAt"
-`;
-
 // Faz 5 Bolum 3: kilit sirasini (ticket -> assignment -> diger) bu
 // repository DAYATMAZ - TicketAssignmentWorkflowService cagirma sirasiyla
 // garanti eder. Assignment tablosunda version kolonu yok; eszamanlilik
@@ -81,11 +61,34 @@ export class AssignmentRepository {
     return row?.ticketId ?? null;
   }
 
+  // Faz 9 Slice 4: $queryRawUnsafe yerine tagged $queryRaw - parametreler
+  // Prisma tarafindan bind edilir, SQL string birlestirmesi yoktur. SQL
+  // metni, FOR UPDATE satir kilidi ve donus tipi degismedi
+  // (invoice.repository.findByIdForUpdate ile ayni idiom).
   async findByIdForUpdate(client: PrismaClientLike, id: string): Promise<AssignmentRow | null> {
-    const rows = await client.$queryRawUnsafe<AssignmentRow[]>(
-      `SELECT ${ASSIGNMENT_COLUMNS} FROM assignments WHERE id = $1 FOR UPDATE`,
-      id,
-    );
+    const rows = await client.$queryRaw<AssignmentRow[]>`
+      SELECT
+        id,
+        ticket_id AS "ticketId",
+        technician_id AS "technicianId",
+        assigned_by_user_id AS "assignedByUserId",
+        assignment_status AS "assignmentStatus",
+        assigned_at AS "assignedAt",
+        accepted_at AS "acceptedAt",
+        rejected_at AS "rejectedAt",
+        rejection_reason AS "rejectionReason",
+        en_route_at AS "enRouteAt",
+        arrived_at AS "arrivedAt",
+        started_at AS "startedAt",
+        completed_at AS "completedAt",
+        resolution_note AS "resolutionNote",
+        is_current AS "isCurrent",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM assignments
+      WHERE id = ${id}
+      FOR UPDATE
+    `;
     return rows[0] ?? null;
   }
 
@@ -93,10 +96,29 @@ export class AssignmentRepository {
     client: PrismaClientLike,
     ticketId: string,
   ): Promise<AssignmentRow | null> {
-    const rows = await client.$queryRawUnsafe<AssignmentRow[]>(
-      `SELECT ${ASSIGNMENT_COLUMNS} FROM assignments WHERE ticket_id = $1 AND is_current = true FOR UPDATE`,
-      ticketId,
-    );
+    const rows = await client.$queryRaw<AssignmentRow[]>`
+      SELECT
+        id,
+        ticket_id AS "ticketId",
+        technician_id AS "technicianId",
+        assigned_by_user_id AS "assignedByUserId",
+        assignment_status AS "assignmentStatus",
+        assigned_at AS "assignedAt",
+        accepted_at AS "acceptedAt",
+        rejected_at AS "rejectedAt",
+        rejection_reason AS "rejectionReason",
+        en_route_at AS "enRouteAt",
+        arrived_at AS "arrivedAt",
+        started_at AS "startedAt",
+        completed_at AS "completedAt",
+        resolution_note AS "resolutionNote",
+        is_current AS "isCurrent",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM assignments
+      WHERE ticket_id = ${ticketId} AND is_current = true
+      FOR UPDATE
+    `;
     return rows[0] ?? null;
   }
 

@@ -23,10 +23,13 @@ export const appConfig = registerAs('app', () => {
 
 export const corsConfig = registerAs('cors', () => {
   const env = getValidatedEnv();
+  // Girdi icerigi validation.schema.ts'te dogrulanir (yalniz http/https
+  // origin bicimi, bos girdi ve '*' reddi); burada yalniz normalizasyon
+  // yapilir: trim + duplicate temizligi (Faz 9 Slice 4).
   return {
-    allowedOrigins: env.CORS_ALLOWED_ORIGINS.split(',')
-      .map((origin) => origin.trim())
-      .filter((origin) => origin.length > 0),
+    allowedOrigins: [
+      ...new Set(env.CORS_ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())),
+    ],
   };
 });
 
@@ -107,6 +110,18 @@ export const backgroundJobsConfig = registerAs('backgroundJobs', () => {
   const backgroundJobsEnabledRaw = env.BACKGROUND_JOBS_ENABLED ?? 'true';
   return {
     enabled: env.NODE_ENV !== 'test' && backgroundJobsEnabledRaw === 'true',
+  };
+});
+
+// Faz 9 karar #2: dev-only SMS inbox CIFT kosula baglidir - YALNIZ
+// NODE_ENV=development VE DEV_SMS_INBOX_ENABLED=true iken acilir.
+// Varsayilan false'tur; production/test ortaminda deger 'true' olsa bile
+// kapali kalir. Ayni cift kosul route mount'u icin app.module.ts'te
+// (isDevToolsEnabled) ve provider seciminde sms.module.ts'te kullanilir.
+export const devSmsInboxConfig = registerAs('devSmsInbox', () => {
+  const env = getValidatedEnv();
+  return {
+    enabled: env.NODE_ENV === 'development' && env.DEV_SMS_INBOX_ENABLED === 'true',
   };
 });
 

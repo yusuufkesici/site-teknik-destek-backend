@@ -1,0 +1,48 @@
+meta {
+  name: 09 Ayni donem ikinci invoice - 409 INVOICE_PERIOD_OVERLAP
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/contracts/{{panoramaContractId}}/invoices
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "billingPeriodStart": "{{invPeriodStart}}",
+    "billingPeriodEnd": "{{invPeriodEnd}}",
+    "issueDate": "{{invIssueDate}}",
+    "dueDate": "{{invDueDate}}",
+    "amount": "15000.00"
+  }
+}
+
+assert {
+  res.status: eq 409
+  res.body.error.code: eq INVOICE_PERIOD_OVERLAP
+}
+
+script:pre-request {
+  const now = new Date();
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const pad = (n) => String(n).padStart(2, "0");
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  bru.setVar("invPeriodStart", `${y}-${pad(m + 1)}-01`);
+  bru.setVar("invPeriodEnd", `${y}-${pad(m + 1)}-${pad(lastDay)}`);
+  bru.setVar("invIssueDate", `${y}-${pad(m + 1)}-01`);
+  bru.setVar("invDueDate", `${y}-${pad(m + 1)}-${pad(lastDay)}`);
+}
+
+docs {
+  Pozitif zincirdeki fatura ile birebir ayni donem yeniden gonderilir;
+  iptal edilmemis cakisan donem 409 uretir. Pozitif fatura adimi
+  kosulmadan calistirilirsa bu istek 201 donebilir - sira onemlidir.
+}

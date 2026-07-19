@@ -1,0 +1,35 @@
+meta {
+  name: 05 Invoice PAID
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{baseUrl}}/invoices/{{invoiceId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{opsToken}}
+}
+
+body:json {
+  {
+    "status": "PAID",
+    "paymentMethod": "BANK_TRANSFER",
+    "referenceNumber": "MANUEL-KABUL-0001"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.status: eq PAID
+  res.body.paidAt: isDefined
+}
+
+docs {
+  PAID hedefi paymentMethod zorunlu kilar; BANK_TRANSFER icin
+  referenceNumber da zorunludur (INVOICE_PAYMENT_DETAILS_REQUIRED).
+  paidAt server tarafinda uretilir, client'tan alinmaz.
+}

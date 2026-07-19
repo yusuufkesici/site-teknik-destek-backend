@@ -1,0 +1,38 @@
+meta {
+  name: 11 Attachment upload (TECHNICIAN, AFTER_WORK)
+  type: http
+  seq: 11
+}
+
+post {
+  url: {{baseUrl}}/tickets/{{ticketId}}/attachments
+  body: multipartForm
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{techToken}}
+}
+
+body:multipart-form {
+  attachmentType: AFTER_WORK
+  assignmentId: {{assignmentId}}
+  file: @file(fixtures/sample.jpg)
+}
+
+assert {
+  res.status: eq 201
+  res.body.id: isDefined
+  res.body.mimeType: eq image/jpeg
+}
+
+script:post-response {
+  bru.setVar("attachmentId", res.body.id);
+}
+
+docs {
+  Teknisyen yuklemesi assignmentId zorunludur ve assignment kendi, current
+  ve ACCEPTED/ACTIVE durumda olmalidir; bu nedenle upload COMPLETE
+  adimindan ONCE calistirilmalidir. Yalniz JPEG/PNG/WEBP kabul edilir ve
+  magic-byte ile dogrulanir.
+}

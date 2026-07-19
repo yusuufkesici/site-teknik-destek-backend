@@ -1,0 +1,29 @@
+meta {
+  name: 01 OPERATIONS OTP request
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/auth/otp/request
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "phoneNumber": "{{opsPhone}}"
+  }
+}
+
+assert {
+  res.status: eq 200
+  res.body.message: isDefined
+}
+
+docs {
+  Enumeration korumasi nedeniyle yanit her kosulda ayni generic mesajdir.
+  Ayni numara icin OTP_RESEND_COOLDOWN_SECONDS (60 sn) icinde tekrarlanan
+  istek sessizce yeni OTP uretmez; koleksiyon tekrar kosulacaksa 60 sn
+  bekleyin. Telefon basina limit: 3 istek / 600 sn.
+}

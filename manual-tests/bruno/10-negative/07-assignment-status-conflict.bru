@@ -1,0 +1,25 @@
+meta {
+  name: 07 Tamamlanmis assignment'a accept - 409
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{baseUrl}}/assignments/{{assignmentId}}/accept
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{techToken}}
+}
+
+assert {
+  res.status: eq 409
+  res.body.error.code: eq ASSIGNMENT_STATUS_CONFLICT
+}
+
+docs {
+  Pozitif zincirde COMPLETED olan assignment yeniden accept edilemez;
+  yalniz PENDING durumundan accept mumkundur.
+}

@@ -1,0 +1,27 @@
+meta {
+  name: 08 ARRIVED eventi
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{baseUrl}}/assignments/{{assignmentId}}/status
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{techToken}}
+}
+
+body:json {
+  {
+    "event": "ARRIVED"
+  }
+}
+
+assert {
+  res.status: eq 201
+  res.body.assignmentStatus: eq ACTIVE
+  res.body.arrivedAt: isDefined
+}

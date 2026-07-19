@@ -1,0 +1,21 @@
+meta {
+  name: 06 Teknisyen accept (PENDING -> ACCEPTED)
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{baseUrl}}/assignments/{{assignmentId}}/accept
+  body: none
+  auth: none
+}
+
+headers {
+  Authorization: Bearer {{techToken}}
+}
+
+assert {
+  res.status: eq 201
+  res.body.assignmentStatus: eq ACCEPTED
+  res.body.acceptedAt: isDefined
+}
