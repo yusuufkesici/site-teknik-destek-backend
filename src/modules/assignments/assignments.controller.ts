@@ -36,6 +36,20 @@ export class AssignmentsController {
     return toAssignmentResponse(created);
   }
 
+  // Frontend enablement plani E4 (docs/frontend-enablement-plan.md Bolum 3):
+  // OPERATIONS'in reassign/cancel akisi icin current assignment kesfi.
+  // Diger rollere acilmasi ayri bir urun/PII karari oldugu icin bilinçli
+  // olarak yalniz OPERATIONS (plan Bolum 3/E4 gerekcesi).
+  @Roles(UserRole.OPERATIONS)
+  @Get('tickets/:ticketId/assignments/current')
+  async currentForTicket(
+    @Param('ticketId') ticketId: string,
+    @CurrentUser() actor: AuthenticatedUser,
+  ) {
+    const current = await this.assignmentService.getCurrentForTicket(actor, ticketId);
+    return toAssignmentResponse(current);
+  }
+
   @Roles(UserRole.TECHNICIAN)
   @Post('assignments/:id/accept')
   async accept(@Param('id') id: string, @CurrentUser() actor: AuthenticatedUser) {

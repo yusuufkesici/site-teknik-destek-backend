@@ -18,10 +18,11 @@ import { FacilityRepository } from '../../facilities/repositories/facility.repos
 import { MembershipQueryService } from '../../memberships/membership-query.service';
 import { ResidentUnitAssignmentRepository } from '../../memberships/repositories/resident-unit-assignment.repository';
 import { SiteMembershipRepository } from '../../memberships/repositories/site-membership.repository';
+import type { ResidentUnitAssignmentWithUnitRow } from '../../memberships/repositories/resident-unit-assignment.repository';
 import type { CreateResidentDto } from '../dto/create-resident.dto';
 import type { ListSiteUsersQueryDto } from '../dto/list-site-users-query.dto';
 import type { UpdateUserDto } from '../dto/update-user.dto';
-import type { UserRow } from '../repositories/user.repository';
+import type { TechnicianSummaryRow, UserRow } from '../repositories/user.repository';
 import { UserRepository } from '../repositories/user.repository';
 import { UserAccessPolicy } from './user-access.policy';
 
@@ -335,6 +336,19 @@ export class UsersService {
     const limit = query.limit ?? DEFAULT_PAGE_LIMIT;
     const rows = await this.userRepo.listBySite(this.prisma, { siteId, cursor, limit });
     return buildPage(rows, limit);
+  }
+
+  // Frontend enablement plani E2 (docs/frontend-enablement-plan.md Bolum 3):
+  // OPERATIONS'in atama ekrani icin salt-okunur teknisyen ozeti. Rol kisiti
+  // controller'daki @Roles(OPERATIONS) ile kesilir.
+  async listActiveTechnicians(): Promise<TechnicianSummaryRow[]> {
+    return this.userRepo.listActiveTechnicianSummaries(this.prisma);
+  }
+
+  // Frontend enablement plani E1: cagiranin KENDI aktif unit assignment'lari.
+  // Parametre alinmaz - baskasinin kaydi sorgulanamaz (IDOR yuzeyi yok).
+  async listMyUnits(actor: AuthenticatedUser): Promise<ResidentUnitAssignmentWithUnitRow[]> {
+    return this.residentUnitAssignmentRepo.listActiveForUserWithUnit(this.prisma, actor.id);
   }
 
   async deactivateAssignment(
