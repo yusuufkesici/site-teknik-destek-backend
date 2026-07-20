@@ -8,17 +8,19 @@ import {
   type PaginatedResult,
 } from '../../../common/utils/pagination.util';
 import { PrismaService } from '../../../infrastructure/database/prisma/prisma.service';
+import { TicketReadAccessService } from '../../tickets/services/ticket-read-access.service';
 import { AssignmentAuthorizationPolicy } from '../policies/assignment-authorization.policy';
 import type { ListMyAssignmentsQueryDto } from '../dto/list-my-assignments-query.dto';
 import type { AssignmentMaterialWithMaterialRow } from '../repositories/assignment-material.repository';
 import { AssignmentMaterialRepository } from '../repositories/assignment-material.repository';
-import type { AssignmentWithTicketRow } from '../repositories/assignment.repository';
+import type { AssignmentRow, AssignmentWithTicketRow } from '../repositories/assignment.repository';
 import { AssignmentRepository } from '../repositories/assignment.repository';
 
 const DEFAULT_PAGE_LIMIT = 20;
 
-// Faz 5 Bolum 2: salt-okunur uclar (my-list, materials read). Yazma
-// islemleri TicketAssignmentWorkflowService'te toplanir.
+// Faz 5 Bolum 2: salt-okunur uclar (my-list, materials read, current
+// assignment kesfi). Yazma islemleri TicketAssignmentWorkflowService'te
+// toplanir.
 @Injectable()
 export class AssignmentService {
   constructor(
@@ -26,6 +28,7 @@ export class AssignmentService {
     private readonly assignmentRepo: AssignmentRepository,
     private readonly assignmentMaterialRepo: AssignmentMaterialRepository,
     private readonly authPolicy: AssignmentAuthorizationPolicy,
+    private readonly ticketAccess: TicketReadAccessService,
   ) {}
 
   async listMy(
@@ -68,5 +71,25 @@ export class AssignmentService {
     }
     await this.authPolicy.assertCanReadMaterials(actor, assignment, this.prisma);
     return this.assignmentMaterialRepo.listByAssignment(this.prisma, assignmentId);
+  }
+
+  // Frontend enablement plani E4: once parent ticket erisimi yeniden
+  // dogrulanir (uniform 404 - ticket yok/erisilemezse TICKET_NOT_FOUND),
+  // sonra current assignment okunur. Current yoksa (OPEN/TRIAGED/terminal
+  // durumlar) 404 ASSIGNMENT_NOT_FOUND doner - bos kaynak icin 200+null
+  // zarfi projede kullanilmaz (dev-sms-inbox emsali).
+  async getCurrentForTicket(actor: AuthenticatedUser, ticketId: string): Promise<AssignmentRow> {
+    await this.ticketAccess.assertReadableAndGet(actor, ticketId, this.prisma);
+
+    const current = await this.assignmentRepo.findCurrentByTicketId(this.prisma, ticketId);
+    if (!current) {
+      throw new DomainError(
+        ERROR_CODES.ASSIGNMENT_NOT_FOUND,
+        HttpStatus.NOT_FOUND,
+        'Assignment bulunamadi.',
+      );
+    }
+
+    return current;
   }
 }

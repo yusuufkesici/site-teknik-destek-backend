@@ -11,6 +11,19 @@ export interface ResidentUnitAssignmentRow {
   endsAt: Date | null;
 }
 
+// Frontend enablement plani E1 (docs/frontend-enablement-plan.md Bolum 3):
+// GET /users/me/units icin unit ozetiyle birlikte satir. unit.siteId'nin
+// Prisma tipi nullable'dir (SITE satirlarinda null) - UNIT satirlarinda
+// chk_facility_root DB kisiti doluluk garantisi verir, dogrulama mapper'da
+// acikca yapilir (non-null assertion kullanilmaz).
+export interface ResidentUnitAssignmentWithUnitRow {
+  id: string;
+  unitId: string;
+  isPrimary: boolean;
+  startsAt: Date;
+  unit: { id: string; name: string; code: string; siteId: string | null };
+}
+
 @Injectable()
 export class ResidentUnitAssignmentRepository {
   // Onboarding'in idempotency/cakisma kararlari icin: kullanicinin HERHANGI
@@ -22,6 +35,25 @@ export class ResidentUnitAssignmentRepository {
   ): Promise<ResidentUnitAssignmentRow | null> {
     return client.residentUnitAssignment.findFirst({
       where: { userId, isActive: true },
+    });
+  }
+
+  // Frontend enablement plani E1: yalniz cagiranin KENDI aktif kayitlari,
+  // unit ozetiyle. @@index([userId, isActive]) mevcut; salt-okunur.
+  async listActiveForUserWithUnit(
+    client: PrismaClientLike,
+    userId: string,
+  ): Promise<ResidentUnitAssignmentWithUnitRow[]> {
+    return client.residentUnitAssignment.findMany({
+      where: { userId, isActive: true },
+      select: {
+        id: true,
+        unitId: true,
+        isPrimary: true,
+        startsAt: true,
+        unit: { select: { id: true, name: true, code: true, siteId: true } },
+      },
+      orderBy: [{ startsAt: 'desc' }, { id: 'desc' }],
     });
   }
 

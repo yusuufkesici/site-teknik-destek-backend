@@ -122,6 +122,18 @@ export class AssignmentRepository {
     return rows[0] ?? null;
   }
 
+  // Frontend enablement plani E4 (docs/frontend-enablement-plan.md Bolum 3):
+  // findCurrentForUpdate'in FOR UPDATE'siz, transaction disinda kullanilabilen
+  // salt-okunur karsiligi. uq_assignments_one_current_per_ticket partial
+  // unique index'i en fazla bir satir garantiler; kilitli metot yalniz
+  // workflow transaction'larinda kullanilmaya devam eder.
+  async findCurrentByTicketId(
+    client: PrismaClientLike,
+    ticketId: string,
+  ): Promise<AssignmentRow | null> {
+    return client.assignment.findFirst({ where: { ticketId, isCurrent: true } });
+  }
+
   async findActiveTechnician(
     client: PrismaClientLike,
     technicianId: string,

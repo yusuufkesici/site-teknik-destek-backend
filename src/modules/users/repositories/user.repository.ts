@@ -8,6 +8,15 @@ export interface UserContactRow {
   phoneNumber: string;
 }
 
+// Frontend enablement plani E2 (docs/frontend-enablement-plan.md Bolum 3):
+// atama ekrani icin telefon ICERMEYEN dar ozet - UserContactRow'un telefonu
+// yalniz SMS fan-out icindir, bu yuzden o tip yeniden kullanilmaz.
+export interface TechnicianSummaryRow {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
 export interface UserRow {
   id: string;
   phoneNumber: string;
@@ -114,6 +123,19 @@ export class UserRepository {
     return client.user.findMany({
       where: { role, isActive: true, deletedAt: null },
       select: { id: true, phoneNumber: true },
+    });
+  }
+
+  // Frontend enablement plani E2: acikca adlandirilmis, role sabitlenmis
+  // sorgu (implementation-overrides.md #3 deseni) - rol client'tan ALINMAZ.
+  // Teknisyenler sinirli sirket personelidir; cursor karmasikligi yerine
+  // deterministik siralama + sabit ust sinir uygulanir (plan Bolum 3/E2).
+  async listActiveTechnicianSummaries(client: PrismaClientLike): Promise<TechnicianSummaryRow[]> {
+    return client.user.findMany({
+      where: { role: 'TECHNICIAN', isActive: true, deletedAt: null },
+      select: { id: true, firstName: true, lastName: true },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }, { id: 'asc' }],
+      take: 500,
     });
   }
 
