@@ -9,15 +9,19 @@ ve çelişkiler Bölüm 15'te raporlanmıştır. Kodda doğrulanamayan konular
 
 ## 1. Belge statüsü
 
-- **İncelenen branch:** `phase-10-production-integrations`
-- **Son commit:** `aed8250ca58dde232a4947de002a67c2b6c2b7b5` — "Merge pull request #7 from yusuufkesici/phase-9-hardening-ci-docs"
-- **Çalışma ağacı:** ilk inceleme temiz ağaç üzerinde yapıldı; aynı gün
-  `docs/frontend-enablement-plan.md` uygulanarak dört salt-okunur keşif ucu
-  (`GET /materials`, `GET /users/technicians`, `GET /users/me/units`,
-  `GET /tickets/:ticketId/assignments/current`) çalışma ağacına eklendi ve bu
-  belge o değişiklikleri de kapsayacak şekilde güncellendi (henüz commit
-  edilmedi).
-- **İnceleme tarihi:** 2026-07-19 (keşif uçları güncellemesi dahil)
+- **İncelenen branch:** `main`
+- **Backend kaynak commit:** `13da24e4e23730aeb10b1e1daebb87d2d90c94be` —
+  "Merge pull request #8 from yusuufkesici/phase-10-production-integrations"
+  (PR #8 merge edildi; dört frontend discovery endpoint'i —
+  `GET /materials`, `GET /users/technicians`, `GET /users/me/units`,
+  `GET /tickets/:ticketId/assignments/current` — bu commit ile `main`'e
+  merge edilmiştir).
+- **Test durumu (merge öncesi doğrulama):** 632 unit + 147 integration +
+  53 E2E = **832 test**, tamamı geçti. Merge sonrası `main` branch CI
+  koşumu (`Lint, build ve testler` + `Production imaj build ve boot
+  smoke`) **başarılı** sonuçlandı.
+- **İnceleme tarihi:** 2026-07-19 (keşif uçları güncellemesi dahil),
+  2026-07-20'de PR #8 merge sonrası metadata güncellemesi.
 - **İncelenen temel belgeler:** `docs/implementation-overrides.md`,
   `docs/architecture.md` (Bölüm 7, 11, 17 hedefli okuma), `.env.example`,
   `.github/workflows/ci.yml`, `prisma/seed.ts`. `docs/manual-acceptance.md`,
