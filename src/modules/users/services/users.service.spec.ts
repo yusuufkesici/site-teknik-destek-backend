@@ -46,6 +46,7 @@ function buildService() {
     update: jest.fn().mockResolvedValue(buildUser()),
     deactivateGlobally: jest.fn().mockResolvedValue(buildUser({ isActive: false })),
     listBySite: jest.fn().mockResolvedValue([]),
+    listActiveTechnicianSummaries: jest.fn().mockResolvedValue([]),
   };
   const accessPolicy = {
     assertManagerCanAccessResident: jest.fn().mockResolvedValue(undefined),
@@ -65,6 +66,7 @@ function buildService() {
     deactivateAllForUserInSite: jest.fn().mockResolvedValue(1),
     findScopedForUpdate: jest.fn(),
     deactivate: jest.fn().mockResolvedValue(undefined),
+    listActiveForUserWithUnit: jest.fn().mockResolvedValue([]),
   };
   const facilityRepo = { findAliveById: jest.fn().mockResolvedValue(buildFacility()) };
   const authSessionRevocation = { revokeAllForUser: jest.fn().mockResolvedValue(undefined) };
@@ -412,5 +414,32 @@ describe('UsersService.deactivateAssignment', () => {
 
     expect(residentUnitAssignmentRepo.deactivate).not.toHaveBeenCalled();
     expect(audit.log).not.toHaveBeenCalled();
+  });
+});
+
+describe('UsersService.listActiveTechnicians', () => {
+  it('repository ozet sorgusunu kok client ile cagirir ve sonucu aynen doner', async () => {
+    const { service, userRepo } = buildService();
+    const summaries = [{ id: 'tech-1', firstName: 'Tekni', lastName: 'Syen' }];
+    userRepo.listActiveTechnicianSummaries.mockResolvedValue(summaries);
+
+    const result = await service.listActiveTechnicians();
+
+    expect(userRepo.listActiveTechnicianSummaries).toHaveBeenCalledTimes(1);
+    expect(result).toBe(summaries);
+  });
+});
+
+describe('UsersService.listMyUnits', () => {
+  it('yalniz cagiran kullanicinin id degeriyle sorgular', async () => {
+    const { service, residentUnitAssignmentRepo } = buildService();
+    const resident = { id: 'res-1', role: 'RESIDENT', sessionId: 's', tokenVersion: 0 } as const;
+
+    await service.listMyUnits(resident as never);
+
+    expect(residentUnitAssignmentRepo.listActiveForUserWithUnit).toHaveBeenCalledWith(
+      expect.anything(),
+      'res-1',
+    );
   });
 });
